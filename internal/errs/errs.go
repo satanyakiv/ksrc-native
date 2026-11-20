@@ -17,6 +17,7 @@ const (
 	NoKonan    = "E_NO_KONAN"    // no Kotlin/Native distribution was found
 	NoSources  = "E_NO_SOURCES"  // the coordinate has no searchable sources
 	NoRipgrep  = "E_NO_RG"       // the rg binary is missing
+	NoXcode    = "E_NO_XCODE"    // Xcode or its command-line tools are missing
 	NoFile     = "E_NO_FILE"     // a file-id points at a file that does not exist
 	BadCoord   = "E_BAD_COORD"   // a module coordinate cannot be parsed or used
 	BadFileID  = "E_BAD_FILE_ID" // a file-id cannot be parsed

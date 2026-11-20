@@ -28,6 +28,17 @@ func (d Distribution) Frameworks(target string) []string {
 	return dirNames(filepath.Join(d.Home, "klib", "platform", target), platformKlibPrefix)
 }
 
+// RequireTarget reports an error when the distribution has no platform
+// libraries for the target.
+func (d Distribution) RequireTarget(target string) error {
+	if len(d.Frameworks(target)) > 0 {
+		return nil
+	}
+	return errs.New(errs.NoSources,
+		fmt.Sprintf("Kotlin/Native %s has no platform libraries for target %q", d.Version, target),
+		"pass --target with one of: "+strings.Join(d.Targets(), ", "))
+}
+
 // PlatformKlib describes one platform library of a distribution.
 type PlatformKlib struct {
 	Framework string // canonical name, for example UIKit
@@ -39,12 +50,10 @@ type PlatformKlib struct {
 // name is matched without regard to case, and the canonical spelling is
 // returned.
 func (d Distribution) FindPlatformKlib(target, framework string) (PlatformKlib, error) {
-	frameworks := d.Frameworks(target)
-	if len(frameworks) == 0 {
-		return PlatformKlib{}, errs.New(errs.NoSources,
-			fmt.Sprintf("Kotlin/Native %s has no platform libraries for target %q", d.Version, target),
-			"pass --target with one of: "+strings.Join(d.Targets(), ", "))
+	if err := d.RequireTarget(target); err != nil {
+		return PlatformKlib{}, err
 	}
+	frameworks := d.Frameworks(target)
 	for _, name := range frameworks {
 		if strings.EqualFold(name, framework) {
 			return PlatformKlib{
@@ -77,6 +86,12 @@ func suggestFrameworks(want string, frameworks []string) string {
 		near = near[:limit]
 	}
 	return "did you mean " + strings.Join(near, ", ") + "?"
+}
+
+// StdlibSources returns the path of the zip with the sources of the native
+// standard library.
+func (d Distribution) StdlibSources() string {
+	return filepath.Join(d.Home, "sources", "kotlin-stdlib-native-sources.zip")
 }
 
 // KlibTool returns the path of the klib command-line tool of the distribution.

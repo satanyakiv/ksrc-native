@@ -176,13 +176,60 @@ func (s Store) List(namespace string) []Entry {
 // Size returns the total size in bytes of the regular files in the cache. A
 // cache that does not exist yet has size zero.
 func (s Store) Size() (int64, error) {
+	if _, err := os.Stat(s.Root); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return 0, err
+	}
+	return dirSize(s.Root), nil
+}
+
+// Usage describes the disk use of one namespace.
+type Usage struct {
+	Namespace string
+	Entries   []EntryUsage // ready entries, sorted like List
+	Size      int64        // all bytes of the namespace, leftovers of interrupted builds included
+}
+
+// EntryUsage is a ready entry with its size on disk.
+type EntryUsage struct {
+	Entry
+	Size int64
+}
+
+// Usage measures the given namespaces. A namespace that does not exist has
+// no entries and size zero.
+func (s Store) Usage(namespaces ...string) []Usage {
+	out := make([]Usage, 0, len(namespaces))
+	for _, ns := range namespaces {
+		u := Usage{Namespace: ns, Size: dirSize(filepath.Join(s.Root, ns))}
+		for _, e := range s.List(ns) {
+			u.Entries = append(u.Entries, EntryUsage{Entry: e, Size: dirSize(e.Dir)})
+		}
+		out = append(out, u)
+	}
+	return out
+}
+
+// Remove deletes the given namespaces with everything in them. Only the
+// named directories below the root are touched, so a cache root that points
+// at a shared directory by mistake loses nothing else.
+func (s Store) Remove(namespaces ...string) error {
+	for _, ns := range namespaces {
+		if ns == "" || ns != filepath.Base(ns) || ns == "." || ns == ".." {
+			return cacheError(errors.New("invalid namespace "+ns), s.Root)
+		}
+		dir := filepath.Join(s.Root, ns)
+		if err := os.RemoveAll(dir); err != nil {
+			return cacheError(err, dir)
+		}
+	}
+	return nil
+}
+
+func dirSize(dir string) int64 {
 	var total int64
-	err := filepath.WalkDir(s.Root, func(_ string, d fs.DirEntry, err error) error {
+	filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
 		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				return nil
-			}
-			return err
+			return nil
 		}
 		if d.Type().IsRegular() {
 			if info, err := d.Info(); err == nil {
@@ -191,7 +238,7 @@ func (s Store) Size() (int64, error) {
 		}
 		return nil
 	})
-	return total, err
+	return total
 }
 
 func readEntry(dir string) (Entry, bool) {

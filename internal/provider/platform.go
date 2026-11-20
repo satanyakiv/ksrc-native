@@ -37,16 +37,25 @@ type Platform struct {
 // Group implements Provider.
 func (p *Platform) Group() string { return PlatformGroup }
 
-// Resolve implements Provider. The files of the returned Source live under
-// "<Root>/<target>/", so the target is part of every file-id.
-func (p *Platform) Resolve(ctx context.Context, req Request) (Source, error) {
+// Locate implements Provider: the origin is the klib directory.
+func (p *Platform) Locate(_ context.Context, req Request) (Location, error) {
+	coord, klib, err := p.find(req)
+	if err != nil {
+		return Location{}, err
+	}
+	return Location{Coordinate: coord, Path: klib.Path}, nil
+}
+
+// find validates the request and locates the klib. The returned coordinate
+// has the canonical framework name and the version filled in.
+func (p *Platform) find(req Request) (Coordinate, konan.PlatformKlib, error) {
 	coord := req.Coordinate
 	if coord.Group != PlatformGroup {
-		return Source{}, errs.New(errs.BadCoord,
+		return Coordinate{}, konan.PlatformKlib{}, errs.New(errs.BadCoord,
 			fmt.Sprintf("the platform provider cannot resolve %s", coord), coordinateHint)
 	}
 	if coord.Version != "" && coord.Version != p.Dist.Version {
-		return Source{}, errs.New(errs.BadCoord,
+		return Coordinate{}, konan.PlatformKlib{}, errs.New(errs.BadCoord,
 			fmt.Sprintf("%s asks for Kotlin %s, but the distribution in use is %s", coord, coord.Version, p.Dist.Version),
 			"drop the version from the coordinate or pass --kotlin-version "+coord.Version)
 	}
@@ -54,12 +63,20 @@ func (p *Platform) Resolve(ctx context.Context, req Request) (Source, error) {
 	if target == "" {
 		target = konan.DefaultTarget
 	}
-
 	klib, err := p.Dist.FindPlatformKlib(target, coord.Name)
+	if err != nil {
+		return Coordinate{}, konan.PlatformKlib{}, err
+	}
+	return Coordinate{Group: PlatformGroup, Name: klib.Framework, Version: p.Dist.Version}, klib, nil
+}
+
+// Resolve implements Provider. The files of the returned Source live under
+// "<Root>/<target>/", so the target is part of every file-id.
+func (p *Platform) Resolve(ctx context.Context, req Request) (Source, error) {
+	resolved, klib, err := p.find(req)
 	if err != nil {
 		return Source{}, err
 	}
-	resolved := Coordinate{Group: PlatformGroup, Name: klib.Framework, Version: p.Dist.Version}
 
 	entry, err := p.Cache.Ensure(PlatformNamespace, platformKey(klib.Path), func(srcDir string) (cache.Meta, error) {
 		return p.build(ctx, resolved, klib, srcDir)
@@ -96,6 +113,19 @@ func (p *Platform) build(ctx context.Context, coord Coordinate, klib konan.Platf
 		Origin:     klib.Path,
 		Files:      len(result.Files),
 	}, nil
+}
+
+// IsCached reports whether the dump of a framework is already in the cache.
+func (p *Platform) IsCached(target, framework string) bool {
+	if target == "" {
+		target = konan.DefaultTarget
+	}
+	klib, err := p.Dist.FindPlatformKlib(target, framework)
+	if err != nil {
+		return false
+	}
+	_, ok := p.Cache.Get(PlatformNamespace, platformKey(klib.Path))
+	return ok
 }
 
 // Cached returns the platform libraries of this distribution and target whose

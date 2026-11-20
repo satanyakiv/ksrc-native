@@ -1,6 +1,9 @@
 // Package provider turns a module coordinate into a directory of searchable
-// files. Each kind of source has its own synthetic group; this version ships
-// the platform provider only.
+// files. Each kind of source has its own synthetic group:
+//
+//	kn.platform:<Framework>[:<kotlinVersion>]  Kotlin signatures of a platform klib
+//	kn.stdlib:native[:<kotlinVersion>]         sources of the native standard library
+//	sdk.apple:<Framework>[:<sdk>]              Objective-C headers of an Xcode SDK
 package provider
 
 import (
@@ -26,7 +29,7 @@ func (c Coordinate) String() string {
 	return c.Group + ":" + c.Name + ":" + c.Version
 }
 
-const coordinateHint = "use kn.platform:<Framework>[:<kotlinVersion>], for example kn.platform:UIKit"
+const coordinateHint = "use kn.platform:<Framework>[:<kotlinVersion>], kn.stdlib:native[:<kotlinVersion>] or sdk.apple:<Framework>[:<sdk>], for example kn.platform:UIKit"
 
 // ParseCoordinate parses "group:name[:version]".
 func ParseCoordinate(s string) (Coordinate, error) {
