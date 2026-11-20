@@ -72,6 +72,17 @@ two processes that build the same entry do not corrupt each other.
 carry a format version (`platform-dumps-v1`); a change of the file layout must
 raise it.
 
+**Added on 2026-11-20.** The key of a platform dump also holds
+`dump.FormatVersion`, and `meta.json` records it. A fix of the splitter
+raises that constant, and every library is dumped again on its next use; the
+namespace stays. Before, a splitter fix kept serving the files of the old
+splitter until `clean`. A search without `--module` skips entries of another
+format, so a hit is not printed twice. `List` ignores names that start with a
+dot, because the temporary directory of a build holds a `meta.json` for a
+moment before the rename. A build sweeps temporary directories older than one
+hour. The cost: entries of an older format stay on disk, unread, until
+`clean`; `doctor` and `clean` still count them.
+
 ## 2026-11-19: Apple headers are searched in place
 
 **Decision.** `sdk.apple` modules are not cached. ripgrep runs on the

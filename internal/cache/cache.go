@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"syscall"
 	"time"
 
@@ -67,6 +68,7 @@ type Meta struct {
 	Origin     string    `json:"origin"`           // where the data came from, for example the klib path
 	Files      int       `json:"files"`            // number of files under src
 	Created    time.Time `json:"created"`
+	Format     string    `json:"format,omitempty"` // version of what wrote src, for example dump.FormatVersion
 }
 
 // Entry is a ready cache entry.
@@ -102,7 +104,8 @@ func (s Store) Ensure(namespace, key string, build func(srcDir string) (Meta, er
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return Entry{}, cacheError(err, parent)
 	}
-	tmp, err := os.MkdirTemp(parent, ".tmp-")
+	sweepLeftovers(parent)
+	tmp, err := os.MkdirTemp(parent, tmpPrefix)
 	if err != nil {
 		return Entry{}, cacheError(err, parent)
 	}
@@ -148,6 +151,31 @@ func (s Store) Ensure(namespace, key string, build func(srcDir string) (Meta, er
 	return e, nil
 }
 
+// tmpPrefix starts the name of the directory an entry is built in.
+const tmpPrefix = ".tmp-"
+
+// leftoverAge is how old a temporary directory must be before another build
+// removes it. No build runs that long: klib is stopped after two minutes.
+const leftoverAge = time.Hour
+
+// sweepLeftovers removes the temporary directories of builds that died
+// without cleaning up, for example after a kill -9 or a power cut. Failures
+// are ignored: the sweep is housekeeping, not part of the build.
+func sweepLeftovers(namespaceDir string) {
+	dirs, err := os.ReadDir(namespaceDir)
+	if err != nil {
+		return
+	}
+	for _, d := range dirs {
+		if !d.IsDir() || !strings.HasPrefix(d.Name(), tmpPrefix) {
+			continue
+		}
+		if info, err := d.Info(); err == nil && time.Since(info.ModTime()) > leftoverAge {
+			os.RemoveAll(filepath.Join(namespaceDir, d.Name()))
+		}
+	}
+}
+
 // List returns the ready entries of a namespace, sorted by coordinate and
 // target.
 func (s Store) List(namespace string) []Entry {
@@ -157,7 +185,9 @@ func (s Store) List(namespace string) []Entry {
 	}
 	var entries []Entry
 	for _, d := range dirs {
-		if !d.IsDir() {
+		// A name with a dot in front is not an entry. The temporary directory
+		// of a build has its meta.json a moment before it is renamed.
+		if !d.IsDir() || strings.HasPrefix(d.Name(), ".") {
 			continue
 		}
 		if e, ok := readEntry(filepath.Join(s.Root, namespace, d.Name())); ok {

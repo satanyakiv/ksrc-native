@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/satanyakiv/ksrc-native/internal/cache"
+	"github.com/satanyakiv/ksrc-native/internal/dump"
 	"github.com/satanyakiv/ksrc-native/internal/errs"
 	"github.com/satanyakiv/ksrc-native/internal/executil"
 	"github.com/satanyakiv/ksrc-native/internal/konan"
@@ -201,5 +202,56 @@ func TestPlatformCached(t *testing.T) {
 	newer := &Platform{Dist: konan.Distribution{Home: f.fake.Home, Version: "2.5.0"}, Runner: executil.OS{}, Cache: f.platform.Cache}
 	if got := newer.Cached("ios_arm64"); len(got) != 0 {
 		t.Errorf("another version sees %d entries, want 0", len(got))
+	}
+}
+
+func TestPlatformKeyFollowsTheDumpFormat(t *testing.T) {
+	f := newFixture(t)
+	klib, err := f.platform.Dist.FindPlatformKlib("ios_arm64", "UserNotifications")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if platformKeyFor(klib.Path, "1") == platformKeyFor(klib.Path, "2") {
+		t.Error("two dump formats share a cache key: a splitter fix would keep serving the old files")
+	}
+	if platformKey(klib.Path) != platformKeyFor(klib.Path, dump.FormatVersion) {
+		t.Error("platformKey does not use dump.FormatVersion")
+	}
+
+	// A built entry records the format it was split with.
+	if _, err := f.platform.Resolve(context.Background(), Request{Coordinate: coord(t, "kn.platform:UserNotifications"), Target: "ios_arm64"}); err != nil {
+		t.Fatal(err)
+	}
+	entry, ok := f.platform.Cache.Get(PlatformNamespace, platformKey(klib.Path))
+	if !ok || entry.Meta.Format != dump.FormatVersion {
+		t.Errorf("the built entry has format %q (found: %v), want %q", entry.Meta.Format, ok, dump.FormatVersion)
+	}
+}
+
+// An entry that another version of the splitter wrote stays on disk until
+// clean, but a search without --module must not read it next to the new one.
+func TestPlatformCachedSkipsEntriesOfAnotherDumpFormat(t *testing.T) {
+	f := newFixture(t)
+	klib, err := f.platform.Dist.FindPlatformKlib("ios_arm64", "UserNotifications")
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := f.platform.Resolve(context.Background(), Request{Coordinate: coord(t, "kn.platform:UserNotifications"), Target: "ios_arm64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, format := range []string{"", "0"} {
+		_, err := f.platform.Cache.Ensure(PlatformNamespace, platformKeyFor(klib.Path, "old"+format), func(srcDir string) (cache.Meta, error) {
+			err := os.WriteFile(filepath.Join(srcDir, "Old.kt"), []byte("old\n"), 0o644)
+			return cache.Meta{Coordinate: "kn.platform:UserNotifications:2.4.21", Target: "ios_arm64", Origin: klib.Path, Files: 1, Format: format}, err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cached := f.platform.Cached("ios_arm64")
+	if len(cached) != 1 || cached[0].Root != current.Root {
+		t.Errorf("Cached() = %+v, want only the entry of the current dump format at %s", cached, current.Root)
 	}
 }

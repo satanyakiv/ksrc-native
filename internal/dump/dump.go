@@ -48,6 +48,12 @@ import (
 	"github.com/satanyakiv/ksrc-native/internal/errs"
 )
 
+// FormatVersion names what Split writes for a given dump: the file names
+// and the text of the files. It is part of the cache key of a platform
+// library. Change it with every change of the output, and the cached dumps
+// are rebuilt on their next use instead of serving the old files.
+const FormatVersion = "1"
+
 // TopLevelFile holds the functions, properties and type aliases of the
 // library that belong to no class.
 const TopLevelFile = "_toplevel.kt"

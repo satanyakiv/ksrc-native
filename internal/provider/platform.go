@@ -112,6 +112,7 @@ func (p *Platform) build(ctx context.Context, coord Coordinate, klib konan.Platf
 		Target:     klib.Target,
 		Origin:     klib.Path,
 		Files:      len(result.Files),
+		Format:     dump.FormatVersion,
 	}, nil
 }
 
@@ -140,6 +141,12 @@ func (p *Platform) Cached(target string) []Source {
 		if err != nil || coord.Group != PlatformGroup || coord.Version != p.Dist.Version || e.Meta.Target != target {
 			continue
 		}
+		// An entry of another splitter version has another key, so a named
+		// search never reads it. It stays on disk until clean; reading it
+		// here would print every hit twice next to the rebuilt entry.
+		if e.Meta.Format != dump.FormatVersion {
+			continue
+		}
 		// An entry of another distribution with the same version (for example a
 		// second KONAN_DATA_DIR) is not ours.
 		if !strings.HasPrefix(e.Meta.Origin, p.Dist.Home+string(filepath.Separator)) {
@@ -150,10 +157,13 @@ func (p *Platform) Cached(target string) []Source {
 	return sources
 }
 
-// platformKey identifies a dump by the klib's real path and the compiler
-// version in its manifest, so a distribution replaced in place gets a new
-// entry.
-func platformKey(klibDir string) string {
+// platformKey identifies a dump by the klib's real path, the compiler
+// version in its manifest and the version of the splitter. A distribution
+// replaced in place gets a new entry, and so does every library after a
+// change of what the splitter writes.
+func platformKey(klibDir string) string { return platformKeyFor(klibDir, dump.FormatVersion) }
+
+func platformKeyFor(klibDir, format string) string {
 	realPath := klibDir
 	if p, err := filepath.EvalSymlinks(klibDir); err == nil {
 		realPath = p
@@ -162,7 +172,7 @@ func platformKey(klibDir string) string {
 	if manifest, err := konan.Manifest(klibDir); err == nil {
 		compiler = manifest["compiler_version"]
 	}
-	return cache.Key(realPath, compiler)
+	return cache.Key(realPath, compiler, format)
 }
 
 func (p *Platform) logf(format string, args ...any) {

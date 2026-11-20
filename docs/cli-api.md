@@ -279,7 +279,17 @@ cache.
 ```
 
 `meta.json` marks an entry as complete. An entry is built in a temporary
-sibling directory and renamed into place.
+sibling directory, `.tmp-<random>`, and renamed into place. A name that
+starts with a dot is never read as an entry. A build removes the temporary
+directories that are older than one hour: they are what a killed build left
+behind.
+
+The key of a platform dump is a hash of the real path of the klib, the
+`compiler_version` in its manifest and the format version of the splitter.
+`meta.json` records that version as `format`. After an upgrade of the tool
+that changes the split files, a library is dumped again on its next use. The
+entries of the older format are not read any more; they stay on disk until
+`ksrc-native clean`.
 
 ## MCP tools
 

@@ -5,7 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/satanyakiv/ksrc-native/internal/errs"
 )
@@ -251,5 +254,114 @@ func TestCheck(t *testing.T) {
 	// The check creates nothing.
 	if _, err := os.Stat(filepath.Join(base, "new")); !os.IsNotExist(err) {
 		t.Errorf("Check() created %s (stat error = %v), want it to create nothing", filepath.Join(base, "new"), err)
+	}
+}
+
+// A build has its meta.json before it is renamed into place. Until then its
+// directory is not an entry: a search that listed it would lose it mid-run.
+func TestListSkipsTheDirectoryOfABuildInProgress(t *testing.T) {
+	store := Store{Root: t.TempDir()}
+	if _, err := store.Ensure("ns-v1", "key", writeOne("A.kt", "a\n")); err != nil {
+		t.Fatal(err)
+	}
+	tmp := filepath.Join(store.Root, "ns-v1", ".tmp-123456")
+	if err := os.MkdirAll(filepath.Join(tmp, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "meta.json"), []byte("{\"coordinate\": \"kn.platform:Half:2.4.21\"}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	entries := store.List("ns-v1")
+	if len(entries) != 1 || entries[0].Meta.Coordinate != "kn.platform:UIKit:2.4.21" {
+		t.Errorf("List() = %+v, want only the entry that is in place", entries)
+	}
+	if usage := store.Usage("ns-v1"); len(usage[0].Entries) != 1 {
+		t.Errorf("Usage() lists %d entries, want 1", len(usage[0].Entries))
+	}
+}
+
+func TestEnsureSweepsLeftoversOlderThanAnHour(t *testing.T) {
+	store := Store{Root: t.TempDir()}
+	ns := filepath.Join(store.Root, "ns-v1")
+	old := filepath.Join(ns, ".tmp-old")
+	fresh := filepath.Join(ns, ".tmp-fresh")
+	foreign := filepath.Join(ns, "old-but-not-a-leftover")
+	for _, dir := range []string{old, fresh, foreign} {
+		if err := os.MkdirAll(filepath.Join(dir, "src"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "src", "A.kt"), []byte("a\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	twoHoursAgo := time.Now().Add(-2 * time.Hour)
+	for _, dir := range []string{old, foreign} {
+		if err := os.Chtimes(dir, twoHoursAgo, twoHoursAgo); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := store.Ensure("ns-v1", "key", writeOne("A.kt", "a\n")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Errorf("the leftover of a build that died two hours ago is still there (stat error = %v)", err)
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Errorf("a temporary directory of this hour was removed, though its build may still run: %v", err)
+	}
+	if _, err := os.Stat(foreign); err != nil {
+		t.Errorf("a directory that is not a temporary directory of the tool was removed: %v", err)
+	}
+}
+
+func TestEnsureFromTwoGoroutinesLeavesOneEntry(t *testing.T) {
+	for round := 0; round < 20; round++ {
+		store := Store{Root: t.TempDir()}
+		var builds atomic.Int32
+		build := func(srcDir string) (Meta, error) {
+			builds.Add(1)
+			time.Sleep(20 * time.Millisecond) // long enough for the two builds to overlap
+			return writeOne("A.kt", "a\n")(srcDir)
+		}
+
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		var entries [2]Entry
+		var failures [2]error
+		for i := range entries {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				entries[i], failures[i] = store.Ensure("ns-v1", "key", build)
+			}()
+		}
+		close(start)
+		wg.Wait()
+
+		for i, err := range failures {
+			if err != nil {
+				t.Fatalf("round %d: Ensure() of goroutine %d error = %v", round, i, err)
+			}
+			if data, err := os.ReadFile(filepath.Join(entries[i].Src, "A.kt")); err != nil || string(data) != "a\n" {
+				t.Errorf("round %d: goroutine %d got an entry whose file reads %q, %v", round, i, data, err)
+			}
+		}
+		if entries[0].Dir != entries[1].Dir {
+			t.Errorf("round %d: the goroutines got two entries, %s and %s", round, entries[0].Dir, entries[1].Dir)
+		}
+		dirs, err := os.ReadDir(filepath.Join(store.Root, "ns-v1"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var names []string
+		for _, d := range dirs {
+			names = append(names, d.Name())
+		}
+		if len(names) != 1 || names[0] != "key" {
+			t.Errorf("round %d: the namespace holds %q after %d builds, want only the entry", round, names, builds.Load())
+		}
 	}
 }
