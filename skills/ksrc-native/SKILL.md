@@ -1,13 +1,19 @@
 ---
 name: ksrc-native
-description: Search/read Kotlin signatures of Kotlin/Native platform APIs (`platform.UIKit`, `platform.Foundation`, other `platform.*`). Use it instead of guessing an iOS API shape in Kotlin Multiplatform code, and instead of reading `~/.konan` directly.
+description: Search/read what Gradle dependency search does not reach in Kotlin Multiplatform iOS code - Kotlin signatures of Kotlin/Native platform APIs (`platform.UIKit`, `platform.Foundation`, other `platform.*`), sources of the native stdlib and `kotlinx.cinterop`, and Objective-C headers of the Xcode SDK. Use it instead of guessing an iOS API shape, and instead of reading `~/.konan` or Xcode directories directly.
 ---
 
 # ksrc-native
 
-`ksrc-native` answers "what does this Apple API look like from Kotlin?". Platform
-libraries ship as klibs without sources, so the tool dumps their metadata once,
-splits it into one file per class and lets you search and read those files.
+`ksrc-native` answers "what does this Apple API look like from Kotlin?" and
+"what does the native stdlib or the Objective-C header say?". It searches three
+kinds of modules:
+
+| Module | Content | First use |
+| --- | --- | --- |
+| `kn.platform:<Framework>[:<kotlinVersion>]` | Kotlin signatures of `platform.<Framework>`, one file per class | builds a dump, a few seconds |
+| `kn.stdlib:native[:<kotlinVersion>]` | sources of the native stdlib and `kotlinx.cinterop` | extracts a zip, under a second |
+| `sdk.apple:<Framework>[:<sdk>]` | Objective-C headers of an Xcode SDK, with their doc comments | nothing to build |
 
 ## When to use
 
@@ -17,13 +23,16 @@ splits it into one file per class and lets you search and read those files.
   mismatch, wrong overload).
 - You need the members of a class, the methods of a delegate protocol, or a
   constant (`NSURLErrorDomain`, `UIApplicationOpenSettingsURLString`).
+- You need the body or the KDoc of a `kotlinx.cinterop` or native stdlib
+  function (`memScoped`, `usePinned`, `autoreleasepool`).
+- A Kotlin signature is not enough: you need Apple's comment, the availability
+  macro or the nullability annotation from the header.
 
-Not for library dependencies from Gradle (use `ksrc`), and not for the Kotlin
-stdlib or Xcode headers in this version.
+Not for library dependencies from Gradle (use `ksrc`).
 
 ## Flow: search, then cat
 
-1. Search a framework for a declaration. Every hit is
+1. Search a module for a declaration. Every hit is
    `<file-id> <line>:<col>:<text>`.
 
    ```bash
@@ -37,15 +46,26 @@ stdlib or Xcode headers in this version.
    ksrc-native cat 'kn.platform:UIKit:2.4.21!/ios_arm64/UIApplication.kt' --lines 1,60
    ```
 
-The first search of a framework takes a few seconds (the dump is built and
-cached); later searches are instant. Without `--module`, search covers the
-frameworks that are already cached.
+The same flow works for the other modules:
+
+```bash
+ksrc-native search 'fun <R> memScoped' --module kn.stdlib:native
+# kn.stdlib:native:2.4.21!/nativeMain/kotlinx/cinterop/Utils.kt 715:15:public inline fun <R> memScoped(block: MemScope.()->R): R {
+
+ksrc-native search 'presentViewController:' --module sdk.apple:UIKit -- -F
+# sdk.apple:UIKit:iphoneos26.4!/UIViewController.h 262:9:- (void)presentViewController:(UIViewController *)viewControllerToPresent ...
+```
+
+Without `--module`, search covers the platform frameworks that are already
+cached, plus the stdlib. It never builds all frameworks unasked;
+`--all-platform` does that (minutes the first time).
 
 ## How to write patterns
 
-Names in a dump are fully qualified with slashes: `platform/UIKit/UIView`,
-`kotlin/String`, `kotlinx/cinterop/CPointer`. Patterns are ripgrep regular
-expressions.
+Patterns are ripgrep regular expressions.
+
+**Platform dumps.** Names are fully qualified with slashes:
+`platform/UIKit/UIView`, `kotlin/String`, `kotlinx/cinterop/CPointer`.
 
 | You look for | Pattern | Where it lands |
 | --- | --- | --- |
@@ -59,12 +79,33 @@ expressions.
 Limit a search to one class with an rg glob: `-- -g UIApplication.kt`.
 A companion object and nested classes live in the file of their outer class.
 
+**Stdlib.** Ordinary Kotlin sources: `'fun <R> memScoped'`, `'class Arena'`.
+Native-only code is under `nativeMain/`, shared code under `commonMain/`.
+
+**Headers.** Objective-C: search the selector with `-- -F`
+(`'presentViewController:animated:'`), a class with `'@interface UIViewController'`,
+a protocol with `'@protocol UITableViewDelegate'`. Swift-only frameworks
+(SwiftData, Charts) have no headers and no `platform.*` library.
+
+## Other commands
+
+- `ksrc-native deps`: the modules that can be searched, with the cache state.
+- `ksrc-native where <coordinate>`: the klib, zip or Headers directory behind a
+  module. It builds nothing.
+- `ksrc-native doctor`: what the tool found (`rg`, the distribution, the `klib`
+  tool, the stdlib sources, Xcode, the cache).
+- `ksrc-native clean`: lists the cache with sizes. It deletes only with `-y`,
+  or after a yes typed in a terminal; `--dry-run` never deletes.
+
 ## Flags
 
-- `--module kn.platform:<Framework>[:<kotlinVersion>]` (repeatable, short `-m`).
-  The framework is the name after `import platform.`.
+- `--module <coordinate>` (repeatable, short `-m`). For `kn.platform` the name
+  is what follows `import platform.`.
 - `--target <target>`: default `ios_arm64`; use `ios_simulator_arm64`,
-  `macos_arm64` and so on when the API differs per target.
+  `macos_arm64` and so on when the platform API differs per target.
+- `--sdk <sdk>`: Apple SDK of `sdk.apple` modules; default `iphoneos`. Also
+  `iphonesimulator`, `macosx`, or a full name from `deps` such as
+  `iphoneos26.4`. An SDK in the coordinate wins over the flag.
 - `--context N` (short `-C`): lines around each match. Context lines print as
   `<file-id> <line>-<text>`.
 - `-- <rg-args>`: extra ripgrep arguments, for example `-- -i`, `-- -F`,
@@ -78,18 +119,19 @@ Aliases: `ksrc-native rg` is `search`, `ksrc-native open` is `cat`.
 
 ## Common errors
 
-Errors go to stderr as `E_CODE: message. Try: hint`. Follow the hint.
+Errors go to stderr as `E_CODE: message. Try: hint`, and the exit code is 1.
+Follow the hint.
 
 - `E_NO_KONAN`: no Kotlin/Native distribution in `~/.konan`. Run a Kotlin/Native
   Gradle task once (for example `./gradlew compileKotlinIosArm64`), or pass
-  `--konan-home`.
-- `E_NO_SOURCES`: unknown framework or target, or a search without `--module`
-  before anything is cached. Check the name in the hint.
+  `--konan-home`. `sdk.apple` modules work without one.
+- `E_NO_XCODE`: `xcrun` found no developer tools. Only `sdk.apple` modules need
+  Xcode.
+- `E_NO_SOURCES`: unknown framework, target or SDK, a Swift-only framework, or
+  a search without `--module` when nothing is available. Check the name in the
+  hint, or run `ksrc-native deps`.
 - `E_NO_RG`: install ripgrep.
 - `E_KLIB_FAILED`: the `klib` tool needs a JDK on `PATH`.
 - `E_NO_FILE`, `E_BAD_FILE_ID`: copy the file-id from a fresh search line.
 - `no matches` on stderr with exit code 0: the pattern found nothing. Loosen it
-  (drop the package, add `-- -i`) or try another framework.
-
-`ksrc-native doctor` shows what the tool found: `rg`, the distribution, the
-`klib` tool and the cache.
+  (drop the package, add `-- -i`) or try another module.
