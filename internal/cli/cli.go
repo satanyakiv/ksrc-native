@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -18,8 +20,31 @@ import (
 )
 
 // Version is the tool version. scripts/build.sh injects the content of the
-// VERSION file; a plain `go build` leaves "dev".
+// VERSION file; a build without that flag leaves "dev".
 var Version = "dev"
+
+// effectiveVersion returns Version, or, when no version was injected, the
+// module version the Go toolchain recorded. That is what a binary from
+// `go install github.com/satanyakiv/ksrc-native/cmd/ksrc-native@v0.1.0`
+// reports.
+func effectiveVersion() string {
+	if Version != "dev" {
+		return Version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		return moduleVersion(info.Main.Version)
+	}
+	return Version
+}
+
+// moduleVersion turns a module version from the build info into the form the
+// VERSION file uses.
+func moduleVersion(v string) string {
+	if v == "" || v == "(devel)" {
+		return "dev"
+	}
+	return strings.TrimPrefix(v, "v")
+}
 
 // Main runs the command line against the real environment and returns the
 // process exit code.
@@ -92,7 +117,7 @@ metadata once, splits it into one file per class and caches the result.
 Typical flow:
   ksrc-native search 'class platform/UIKit/UIApplication ' --module kn.platform:UIKit
   ksrc-native cat 'kn.platform:UIKit:2.4.21!/ios_arm64/UIApplication.kt' --lines 1,40`,
-		Version:       Version,
+		Version:       effectiveVersion(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
@@ -109,7 +134,7 @@ Typical flow:
 	root.CompletionOptions.DisableDefaultCmd = true
 
 	pf := root.PersistentFlags()
-	pf.StringVar(&flags.konanHome, "konan-home", "", "path of the Kotlin/Native distribution (default: discovered, see `doctor`)")
+	pf.StringVar(&flags.konanHome, "konan-home", "", "`path` of the Kotlin/Native distribution (default: discovered; the doctor command shows it)")
 	pf.StringVar(&flags.kotlinVersion, "kotlin-version", "", "Kotlin version of the distribution to use, for example 2.4.21")
 	pf.StringVar(&flags.project, "project", ".", "project directory; the Kotlin version is read from its gradle/libs.versions.toml")
 	pf.StringVar(&flags.target, "target", konan.DefaultTarget, "Kotlin/Native target of the platform libraries")
@@ -153,13 +178,13 @@ may override them.`,
 				return usageError("mcp needs stdin to read requests from")
 			}
 			return mcpserver.Run(cmd.Context(), a, mcpserver.Options{
-				Version:  Version,
+				Version:  effectiveVersion(),
 				Tools:    names,
 				Defaults: flags.request(),
 			}, mcpserver.StdioTransport(a.Stdin, a.Stdout))
 		},
 	}
-	cmd.Flags().StringVar(&tools, "tools", "", "comma-separated tools to serve, or `all` (default: search,cat,deps)")
+	cmd.Flags().StringVar(&tools, "tools", "", "tools to serve: a comma-separated `list`, or all (default: search,cat,deps)")
 	return cmd
 }
 
@@ -191,7 +216,7 @@ platform/UIKit/UIView, kotlin/String. Arguments after "--" go to rg, for
 example "-- -i" or "-- -F".`,
 		Example: `  ksrc-native search 'class platform/UIKit/UIApplication ' --module kn.platform:UIKit
   ksrc-native search 'fun dataTaskWithURL' --module kn.platform:Foundation --context 2
-  ksrc-native search 'fun <T> memScoped' --module kn.stdlib:native
+  ksrc-native search 'fun <R> memScoped' --module kn.stdlib:native
   ksrc-native search 'presentViewController' --module sdk.apple:UIKit -- -F`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pattern, rgArgs, err := splitSearchArgs(args, cmd.ArgsLenAtDash())

@@ -275,6 +275,17 @@ func TestHelpListsAllCommandsAndFlags(t *testing.T) {
 			t.Errorf("help lacks %q:\n%s", part, stdout)
 		}
 	}
+	// A back-quoted word in a flag description becomes the name of the flag's
+	// value in the help, so only a real placeholder may be quoted.
+	for _, part := range []string{"--konan-home path ", "--kotlin-version string", "--project string", "--target string", "--sdk string"} {
+		if !strings.Contains(stdout, part) {
+			t.Errorf("help lacks %q:\n%s", part, stdout)
+		}
+	}
+	if _, stdout, _ := h.run("mcp", "--help"); !strings.Contains(stdout, "--tools list ") {
+		t.Errorf("mcp --help does not name the value of --tools:\n%s", stdout)
+	}
+
 	code, stdout, _ = h.run("clean", "--help")
 	if code != 0 || !strings.Contains(stdout, "--dry-run") || !strings.Contains(stdout, "--yes") {
 		t.Errorf("clean --help: code = %d\n%s", code, stdout)

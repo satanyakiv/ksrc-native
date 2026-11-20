@@ -256,6 +256,28 @@ func TestVersionAndHelp(t *testing.T) {
 	}
 }
 
+func TestModuleVersion(t *testing.T) {
+	for in, want := range map[string]string{
+		"":         "dev",
+		"(devel)":  "dev",
+		"v0.1.0":   "0.1.0",
+		"v1.2.3-0": "1.2.3-0",
+		"0.2.0":    "0.2.0",
+	} {
+		if got := moduleVersion(in); got != want {
+			t.Errorf("moduleVersion(%q) = %q, want %q", in, got, want)
+		}
+	}
+
+	// An injected version wins over the build info.
+	previous := Version
+	Version = "9.8.7"
+	defer func() { Version = previous }()
+	if got := effectiveVersion(); got != "9.8.7" {
+		t.Errorf("effectiveVersion() = %q, want the injected 9.8.7", got)
+	}
+}
+
 func TestSplitSearchArgs(t *testing.T) {
 	tests := []struct {
 		name    string

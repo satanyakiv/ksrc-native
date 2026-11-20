@@ -146,6 +146,11 @@ func (r *Runner) Calls() []executil.Command {
 func RequireRipgrep(tb testing.TB) {
 	tb.Helper()
 	if _, err := (executil.OS{}).LookPath("rg"); err != nil {
+		// A CI run that skips these tests would be green without having
+		// tested search at all.
+		if os.Getenv("CI") != "" {
+			tb.Fatal("rg is not installed, and CI is set: install ripgrep")
+		}
 		tb.Skip("rg is not installed")
 	}
 }
