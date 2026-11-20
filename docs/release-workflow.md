@@ -57,9 +57,30 @@ differs.
 `darwin/amd64`, `linux/arm64` and `linux/amd64`:
 
 ```text
-dist/ksrc-native_<version>_<os>_<arch>.tar.gz    ksrc-native, LICENSE.txt, README.md
+dist/ksrc-native_<version>_<os>_<arch>.tar.gz    ksrc-native, LICENSE.txt, README.md,
+                                                 THIRD_PARTY_NOTICES
 dist/checksums.txt                               sha256 of every archive
 ```
+
+## Third-party notices
+
+The binary links the Go standard library and a few modules under
+BSD-3-Clause, MIT and Apache-2.0 licences. These licences ask for their text
+next to a binary, so every archive holds `THIRD_PARTY_NOTICES`.
+
+`scripts/notices.sh` writes that file. It asks `go list -deps` which modules
+`./cmd/ksrc-native` links for each release target, and copies the `LICENSE*`,
+`COPYING*`, `NOTICE*` and `PATENTS*` files of each module from the local
+module cache, and `LICENSE` and `PATENTS` of the Go installation. It
+downloads nothing and stops when a module has no licence file.
+
+The file is committed. After a dependency is added, removed or raised, run
+`scripts/notices.sh` and commit the result. Three things fail when the file
+is stale: the test `TestThirdPartyNoticesAreCurrent`, which the `ci` and
+`release` workflows run, `scripts/notices.sh --check`, and
+`scripts/package.sh`. The section of the Go standard library has no version
+in it. If a new Go release changes its licence text, the check fails until
+the file is written again.
 
 `scripts/install.sh` downloads one archive and `checksums.txt` from the
 release and refuses to install when the sha256 differs.

@@ -28,6 +28,7 @@ go test -count=1 ./...           # all tests
 go test -short ./...             # without the tests that build the binary or run the real klib tool
 go test -race ./internal/mcpserver ./internal/cli ./internal/adapter
 scripts/package.sh dist          # release archives and checksums.txt
+scripts/notices.sh               # write THIRD_PARTY_NOTICES again; --check fails when it is stale
 shellcheck scripts/*.sh
 actionlint .github/workflows/*.yml
 claude plugin validate --strict .claude-plugin/plugin.json
@@ -121,6 +122,7 @@ touches all of these in the same commit:
 | MCP tool or input | `internal/mcpserver/tools.go`, the MCP section of `docs/cli-api.md` and of the skill |
 | a design choice | a dated entry in `docs/decisions.md` |
 | version | `VERSION` and the manifests listed in `docs/release-workflow.md` |
+| a dependency added, removed or raised | run `scripts/notices.sh` and commit `THIRD_PARTY_NOTICES` |
 | README examples | run the command and paste its real output, shortened with `...` |
 
 ## Things not to do

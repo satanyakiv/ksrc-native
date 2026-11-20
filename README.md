@@ -432,3 +432,8 @@ go test -short ./...          # skips the tests that build the binary or run the
 ## License
 
 Apache License 2.0. See [LICENSE.txt](LICENSE.txt).
+
+The binary contains code of the Go standard library and of a few Go modules
+under BSD-3-Clause, MIT and Apache-2.0 licences. Their texts are in
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES), and every release archive holds
+that file.
