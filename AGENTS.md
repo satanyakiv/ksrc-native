@@ -82,6 +82,11 @@ Rules that follow from the map:
 - Nothing reads the environment, the home directory or the terminal directly.
   They come from the `Adapter` fields; only `adapter.New` wires those to the
   real ones.
+- A value from the `--` tail of the command line or from an MCP input is
+  untrusted: a model fills it, and text in a repository can steer the model.
+  It never reaches a program as an argument and never becomes part of a path
+  without a check. rg arguments pass `search.NormalizeExtraArgs` (an
+  allow-list); a new rg flag is added there, with a test, or not at all.
 
 ## Code style
 

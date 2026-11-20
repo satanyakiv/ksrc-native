@@ -18,7 +18,7 @@ type SearchRequest struct {
 	Modules     []string // coordinates; empty means "cached platform dumps plus the stdlib"
 	AllPlatform bool     // build and search every platform library of the target
 	Context     int      // lines of context around each match
-	RgArgs      []string // extra arguments for rg
+	RgArgs      []string // extra arguments for rg; untrusted, see search.NormalizeExtraArgs
 }
 
 // Search runs a regular-expression search and prints one line per match:
@@ -39,7 +39,12 @@ func (a *Adapter) search(ctx context.Context, req SearchRequest) error {
 	if req.Context < 0 {
 		return errs.New(errs.BadArgs, "--context must not be negative", "pass --context 3")
 	}
-	// Fail on a missing rg before any dump is built.
+	// Fail on a forbidden rg argument and on a missing rg before any dump is
+	// built. search.Run checks the arguments again; it is the one place that
+	// cannot be bypassed.
+	if _, err := search.NormalizeExtraArgs(req.RgArgs); err != nil {
+		return err
+	}
 	if _, err := search.FindRipgrep(a.Runner); err != nil {
 		return err
 	}

@@ -118,7 +118,11 @@ line.
 - `--context N` (short `-C`): lines around each match. Context lines print as
   `<file-id> <line>-<text>`.
 - `-- <rg-args>`: extra ripgrep arguments, for example `-- -i`, `-- -F`,
-  `-- -g '*Delegate*'`. Put them last.
+  `-- -g '*Delegate*'`. Put them last. Only these pass: `-i -s -S -F -w -x -v
+  -U -P --multiline-dotall`, `-g/--glob <glob>`, `--iglob <glob>`,
+  `-m/--max-count <n>`, `-A/--after-context <n>`, `-B/--before-context <n>`,
+  `--max-columns <n>`. A path or any other flag is `E_BAD_ARGS`. For context
+  lines use `--context N` before the `--`.
 - `cat --lines A,B` (1-based, inclusive), `cat -n` for line numbers.
 - Kotlin version: read from `gradle/libs.versions.toml` of `--project`
   (default: the current directory). Override with `--kotlin-version` or
@@ -140,6 +144,8 @@ Follow the hint.
   a search without `--module` when nothing is available. Check the name in the
   hint, or run `ksrc-native deps`.
 - `E_NO_RG`: install ripgrep.
+- `E_BAD_ARGS` that names an rg argument: the argument after `--` (or in
+  `rg_args`) is not on the list above. Drop it; the hint repeats the list.
 - `E_KLIB_FAILED`: the `klib` tool needs a JDK on `PATH`.
 - `E_NO_FILE`, `E_BAD_FILE_ID`: copy the file-id from a fresh search line.
 - `no matches` on stderr with exit code 0: the pattern found nothing. Loosen it

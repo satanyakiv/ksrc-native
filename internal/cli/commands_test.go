@@ -291,3 +291,64 @@ func TestHelpListsAllCommandsAndFlags(t *testing.T) {
 		t.Errorf("clean --help: code = %d\n%s", code, stdout)
 	}
 }
+
+// The arguments after "--" are checked against the allow-list of
+// search.NormalizeExtraArgs before anything runs.
+func TestSearchRgArgumentsFromTheCommandLine(t *testing.T) {
+	h := newHarness(t)
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "marker")
+	script := filepath.Join(dir, "pre.sh")
+	outside := filepath.Join(dir, "outside.txt")
+	testutil.WriteFile(t, script, []byte("#!/bin/sh\ntouch '"+marker+"'\ncat\n"), 0o755)
+	testutil.WriteFile(t, outside, []byte("hello-from-outside\n"), 0o644)
+
+	refused := []struct {
+		name string
+		args []string
+		part string
+	}{
+		{"a preprocessor", []string{"search", "presentViewController", "--module", "sdk.apple:UIKit", "--", "--pre", script}, `"--pre"`},
+		{"a path", []string{"search", "hello", "--module", "sdk.apple:UIKit", "--", outside}, "a path cannot be added"},
+		{"files with matches", []string{"search", "x", "--module", "sdk.apple:UIKit", "--", "-l"}, `"-l"`},
+		{"glob without a value", []string{"search", "x", "--module", "sdk.apple:UIKit", "--", "-g"}, "-g needs a value"},
+		{"a second --", []string{"search", "hello", "--module", "sdk.apple:UIKit", "--", "-i", "--", outside}, `"--"`},
+		{"a platform module", []string{"search", "x", "--module", unModule, "--", "--files"}, `"--files"`},
+	}
+	for _, tt := range refused {
+		t.Run("refused/"+tt.name, func(t *testing.T) {
+			code, stdout, stderr := h.run(tt.args...)
+			last := lastLine(stderr)
+			if code != 1 || stdout != "" || !strings.HasPrefix(last, "E_BAD_ARGS: ") || !strings.Contains(last, tt.part) || !strings.Contains(last, "Try: these rg arguments are allowed: -i ") {
+				t.Errorf("code = %d, stdout = %q, last stderr line = %q; want 1, nothing, E_BAD_ARGS with %q and the allowed arguments", code, stdout, last, tt.part)
+			}
+		})
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a refused search ran the preprocessor script")
+	}
+	if calls := h.dist.KlibCalls(t); len(calls) != 0 {
+		t.Errorf("a refused search built %d dumps, want 0", len(calls))
+	}
+
+	const header = "sdk.apple:UIKit:iphoneos26.4!/UIViewController.h "
+	allowed := []struct {
+		name   string
+		args   []string
+		prefix string
+	}{
+		{"ignore case", []string{"search", "PRESENTVIEWCONTROLLER", "--module", "sdk.apple:UIKit", "--", "-i"}, header + "2:9:"},
+		{"fixed string", []string{"search", "(void)presentViewController:(", "--module", "sdk.apple:UIKit", "--", "-F"}, header + "2:3:"},
+		{"glob", []string{"search", "@interface", "--module", "sdk.apple:UIKit", "--", "-g", "*Controller*"}, header + "1:1:"},
+		{"max count", []string{"search", "UIViewController", "--module", "sdk.apple:UIKit", "--", "--max-count", "1"}, header + "1:12:"},
+		{"context and a glob", []string{"search", "class platform/UserNotifications/UNNotification ", "--module", unModule, "--context", "1", "--", "-g", "UNNotification.kt"}, unFileID + " 1-"},
+	}
+	for _, tt := range allowed {
+		t.Run("allowed/"+tt.name, func(t *testing.T) {
+			code, stdout, stderr := h.run(tt.args...)
+			if code != 0 || !strings.HasPrefix(stdout, tt.prefix) {
+				t.Errorf("code = %d, stdout = %q, stderr = %q; want 0 and a first line with prefix %q", code, stdout, stderr, tt.prefix)
+			}
+		})
+	}
+}

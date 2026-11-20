@@ -30,7 +30,7 @@ type Options struct {
 	Pattern   string
 	Roots     []Root
 	Context   int      // lines of context around each match; 0 for none
-	ExtraArgs []string // passed to rg before the pattern
+	ExtraArgs []string // untrusted rg arguments; only the allow-list of NormalizeExtraArgs passes
 }
 
 // Line is one line of output: a match or a context line.
@@ -60,6 +60,12 @@ func Run(ctx context.Context, runner executil.Runner, opts Options, emit func(Li
 	if opts.Pattern == "" {
 		return 0, errs.New(errs.BadArgs, "the search pattern is empty", "pass a regular expression, for example 'class platform/UIKit/UIApplication'")
 	}
+	// Checked before anything else, so a forbidden argument fails the same
+	// way with and without roots.
+	args, err := rgArgs(opts)
+	if err != nil {
+		return 0, err
+	}
 	if len(opts.Roots) == 0 {
 		return 0, nil
 	}
@@ -74,7 +80,7 @@ func Run(ctx context.Context, runner executil.Runner, opts Options, emit func(Li
 	pr, pw := io.Pipe()
 	runErr := make(chan error, 1)
 	go func() {
-		err := runner.Run(ctx, executil.Command{Path: rg, Args: rgArgs(opts), Stdout: pw})
+		err := runner.Run(ctx, executil.Command{Path: rg, Args: args, Stdout: pw})
 		pw.Close()
 		runErr <- err
 	}()
@@ -102,19 +108,29 @@ func Run(ctx context.Context, runner executil.Runner, opts Options, emit func(Li
 }
 
 // rgArgs builds the rg command line. Ignore files and user configuration are
-// switched off: the cache may sit below a directory with a .gitignore, and the
-// output must not depend on the machine.
-func rgArgs(opts Options) []string {
+// switched off: the cache may sit below a directory with a .gitignore, and
+// neither the output nor the flags may depend on the machine
+// (RIPGREP_CONFIG_PATH could add --pre).
+//
+// The pattern and the extra arguments are untrusted. The pattern travels as
+// one "--regexp=<pattern>" argument, so a pattern such as "--files" stays a
+// pattern. The extra arguments pass the allow-list and arrive as "--flag" or
+// "--flag=value". The only bare arguments are the roots after "--".
+func rgArgs(opts Options) ([]string, error) {
+	extra, err := NormalizeExtraArgs(opts.ExtraArgs)
+	if err != nil {
+		return nil, err
+	}
 	args := []string{"--json", "--no-config", "--no-ignore", "--sort", "path"}
 	if opts.Context > 0 {
 		args = append(args, "--context", strconv.Itoa(opts.Context))
 	}
-	args = append(args, opts.ExtraArgs...)
-	args = append(args, "--regexp", opts.Pattern, "--")
+	args = append(args, extra...)
+	args = append(args, "--regexp="+opts.Pattern, "--")
 	for _, r := range opts.Roots {
 		args = append(args, r.Dir)
 	}
-	return args
+	return args, nil
 }
 
 func rgMessage(err error) string {
@@ -170,8 +186,8 @@ func parse(r io.Reader, roots []Root, emit func(Line) error) (int, error) {
 			var m message
 			if err := json.Unmarshal(raw, &m); err != nil {
 				return matches, errs.New(errs.BadArgs,
-					"rg printed output that is not JSON, so an extra rg argument changed the output mode",
-					"drop output-mode flags such as -l, -c, --files or --vimgrep from the arguments after `--`")
+					"rg printed output that is not JSON",
+					"run `ksrc-native doctor` and check that the rg on PATH is ripgrep; output-mode flags such as -l, -c or --files are not allowed after `--`")
 			}
 			if m.Type == "match" || m.Type == "context" {
 				n, err := emitLines(m, roots, emit)
@@ -193,7 +209,15 @@ func parse(r io.Reader, roots []Root, emit func(Line) error) (int, error) {
 // emitLines emits the lines of one message. A multi-line match yields one
 // output line per source line.
 func emitLines(m message, roots []Root, emit func(Line) error) (int, error) {
-	fileID := fileIDFor(m.Data.Path.String(), roots)
+	fileID, ok := fileIDFor(m.Data.Path.String(), roots)
+	if !ok {
+		// The allow-list keeps paths and link-following flags away from rg, so
+		// this means a bug or an rg that is not ripgrep. Printing the hit would
+		// show a file the caller did not ask to search.
+		return 0, errs.New(errs.RgFailed,
+			fmt.Sprintf("rg reported a hit in %q, which is outside the searched modules", m.Data.Path.String()),
+			"run `ksrc-native doctor` and check that the rg on PATH is ripgrep")
+	}
 	isMatch := m.Type == "match"
 	column := 0
 	if isMatch {
@@ -226,17 +250,20 @@ func emitLines(m message, roots []Root, emit func(Line) error) (int, error) {
 	return count, nil
 }
 
-// fileIDFor maps an absolute path printed by rg to a file-id. A path outside
-// every root is returned as is, which should not happen.
-func fileIDFor(path string, roots []Root) string {
+// fileIDFor maps an absolute path printed by rg to a file-id. It reports
+// false for a path that is not a file below one of the roots.
+func fileIDFor(path string, roots []Root) (string, bool) {
+	if !filepath.IsAbs(path) {
+		return "", false
+	}
 	for _, r := range roots {
 		rel, err := filepath.Rel(r.Dir, path)
-		if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+		if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			continue
 		}
-		return r.Prefix + filepath.ToSlash(rel)
+		return r.Prefix + filepath.ToSlash(rel), true
 	}
-	return path
+	return "", false
 }
 
 // Format renders a line in the output contract:

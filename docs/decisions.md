@@ -157,3 +157,25 @@ and no release tool beyond the workflow.
 the tests do not run there.
 
 **Cost.** Windows users must build from source and test it themselves.
+
+## 2026-11-20: Values from `--` and from MCP inputs are untrusted
+
+**Decision.** Every value that arrives after `--` on the command line or
+through an input of an MCP tool is checked before it reaches a program or a
+path. The tools are announced as read-only, so no input may run a program or
+read a file outside the three sources.
+
+- The rg arguments pass an allow-list, `search.NormalizeExtraArgs`: ten flags
+  without a value and six with one. They are rewritten to `--flag` and
+  `--flag=value`, so a value is never read as a flag. The pattern travels as
+  one `--regexp=<pattern>` argument. rg runs with `--no-config`. A hit outside
+  the searched directories is an error, not a line of output.
+
+**Why.** A model fills these fields, and a model reads files it did not
+write. Before this change `-- --pre <script>` ran the script, and a path after
+`--` printed lines of any file the user can read. A README in a hostile
+repository could ask for either.
+
+**Cost.** An rg flag outside the list fails with `E_BAD_ARGS`, also for a
+person at a terminal: no `-l`, no `-c`, no `--hidden`, no `-t`. `-m1` must be
+written `-m 1`. A new flag needs a line in the list and a test.

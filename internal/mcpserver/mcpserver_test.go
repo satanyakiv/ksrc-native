@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -499,5 +500,50 @@ func TestRunEndsWhenTheClientCloses(t *testing.T) {
 
 	if err := Run(context.Background(), f.a, Options{Tools: []string{"nope"}}, serverSide); errs.Code(err) != errs.BadArgs {
 		t.Errorf("Run(unknown tool) error = %v, want %s", err, errs.BadArgs)
+	}
+}
+
+// A model fills rg_args and pattern, and text in a hostile repository can
+// steer it. Neither may run a program or read a file outside the modules.
+func TestSearchInputsAreUntrusted(t *testing.T) {
+	f := newFixture(t)
+	session := f.connect(t, Options{})
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "marker")
+	script := filepath.Join(dir, "pre.sh")
+	outside := filepath.Join(dir, "outside.txt")
+	testutil.WriteFile(t, script, []byte("#!/bin/sh\ntouch '"+marker+"'\ncat\n"), 0o755)
+	testutil.WriteFile(t, outside, []byte("hello-from-outside\n"), 0o644)
+
+	for name, rgArgs := range map[string][]string{
+		"a preprocessor":     {"--pre", script},
+		"a path":             {outside},
+		"files with matches": {"-l"},
+		"list files":         {"--files"},
+		"glob without value": {"-g"},
+	} {
+		res := call(t, session, ToolSearch, map[string]any{"pattern": "hello", "modules": []string{"sdk.apple:UIKit"}, "rg_args": rgArgs})
+		got := texts(t, res)
+		if !res.IsError || len(got) != 1 || !strings.HasPrefix(got[0], "E_BAD_ARGS: ") || !strings.Contains(got[0], "Try: these rg arguments are allowed: -i ") {
+			t.Errorf("%s: IsError = %v, content = %q; want one E_BAD_ARGS text with the allowed arguments", name, res.IsError, got)
+		}
+	}
+
+	// A pattern that looks like a flag is a pattern: a search without matches.
+	for _, pattern := range []string{"--files", "--pre=" + script, "-l", "--no-json"} {
+		res := call(t, session, ToolSearch, map[string]any{"pattern": pattern, "modules": []string{"sdk.apple:UIKit"}})
+		got := texts(t, res)
+		if res.IsError || len(got) != 1 || !strings.HasPrefix(got[0], "ksrc-native: no matches for ") {
+			t.Errorf("pattern %q: IsError = %v, content = %q; want the no-matches note", pattern, res.IsError, got)
+		}
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a tool call ran the preprocessor script")
+	}
+
+	// The allowed arguments still work.
+	res := call(t, session, ToolSearch, map[string]any{"pattern": "PRESENTVIEWCONTROLLER", "modules": []string{"sdk.apple:UIKit"}, "rg_args": []string{"-i", "-g", "*Controller*", "--max-count", "1"}})
+	if got := texts(t, res); res.IsError || len(got) != 1 || !strings.HasPrefix(got[0], vcFileID+" 2:9:") {
+		t.Errorf("allowed rg_args: IsError = %v, content = %q", res.IsError, got)
 	}
 }

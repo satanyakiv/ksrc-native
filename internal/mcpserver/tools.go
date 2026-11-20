@@ -44,7 +44,7 @@ type SearchInput struct {
 	Modules     []string `json:"modules,omitempty" jsonschema:"modules to search: kn.platform:<Framework>[:<kotlinVersion>], kn.stdlib:native[:<kotlinVersion>], sdk.apple:<Framework>[:<sdk>]. Without modules, the cached platform dumps and the stdlib are searched"`
 	AllPlatform bool     `json:"all_platform,omitempty" jsonschema:"build and search every platform library of the target; takes minutes the first time"`
 	Context     int      `json:"context,omitempty" jsonschema:"lines of context around each match"`
-	RgArgs      []string `json:"rg_args,omitempty" jsonschema:"extra ripgrep arguments, for example -i, -F, or -g with a file glob"`
+	RgArgs      []string `json:"rg_args,omitempty" jsonschema:"extra ripgrep arguments, one array item per word. Only these are allowed: -i -s -S -F -w -x -v -U -P --multiline-dotall, -g/--glob <glob>, --iglob <glob>, -m/--max-count <n>, -A/--after-context <n>, -B/--before-context <n>, --max-columns <n>. Anything else is an E_BAD_ARGS error"`
 	CommonInput
 }
 

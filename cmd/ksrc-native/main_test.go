@@ -140,6 +140,7 @@ func TestExitCodes(t *testing.T) {
 		{"help", []string{"--help"}, 0, ""},
 		{"search with a match", []string{"search", "val UNErrorDomain", "--module", "kn.platform:UserNotifications"}, 0, ""},
 		{"search without a match", []string{"search", "NoSuchSymbolAnywhere", "--module", "kn.platform:UserNotifications"}, 0, "ksrc-native: no matches"},
+		{"search with allowed rg arguments", []string{"search", "VAL UNERRORDOMAIN", "--module", "kn.platform:UserNotifications", "--", "-i", "-g", "_toplevel.kt", "--max-count", "1"}, 0, ""},
 		{"cat", []string{"cat", fileID, "--lines", "1,2"}, 0, ""},
 		{"where", []string{"where", "kn.stdlib:native"}, 0, ""},
 		{"clean without a terminal", []string{"clean"}, 0, ""},
@@ -156,6 +157,11 @@ func TestExitCodes(t *testing.T) {
 		{"E_BAD_ARGS: unknown flag", []string{"search", "x", "--nope"}, 1, "E_BAD_ARGS: "},
 		{"E_BAD_ARGS: unknown MCP tool", []string{"mcp", "--tools=clean"}, 1, "E_BAD_ARGS: "},
 		{"E_RG_FAILED: bad regular expression", []string{"search", "(", "--module", "kn.platform:UserNotifications"}, 1, "E_RG_FAILED: "},
+		{"E_BAD_ARGS: pattern that starts with a dash is not passed on", []string{"search", "--module", "kn.platform:UserNotifications", "--files"}, 1, "E_BAD_ARGS: "},
+		{"E_BAD_ARGS: rg preprocessor", []string{"search", "x", "--module", "kn.platform:UserNotifications", "--", "--pre", "/bin/cat"}, 1, "E_BAD_ARGS: "},
+		{"E_BAD_ARGS: rg path", []string{"search", "x", "--module", "kn.platform:UserNotifications", "--", "/etc/hosts"}, 1, "E_BAD_ARGS: "},
+		{"E_BAD_ARGS: rg output mode", []string{"search", "x", "--module", "kn.platform:UserNotifications", "--", "-l"}, 1, "E_BAD_ARGS: "},
+		{"E_BAD_ARGS: rg flag without its value", []string{"search", "x", "--module", "kn.platform:UserNotifications", "--", "-g"}, 1, "E_BAD_ARGS: "},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

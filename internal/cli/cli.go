@@ -212,8 +212,13 @@ stdlib are searched. --all-platform builds and searches every platform
 library of the target; that takes minutes the first time.
 
 Names in a platform dump are fully qualified with slashes:
-platform/UIKit/UIView, kotlin/String. Arguments after "--" go to rg, for
-example "-- -i" or "-- -F".`,
+platform/UIKit/UIView, kotlin/String.
+
+Arguments after "--" go to rg. Only these are allowed:
+  -i -s -S -F -w -x -v -U -P --multiline-dotall
+  -g/--glob <glob>, --iglob <glob>, -m/--max-count <n>,
+  -A/--after-context <n>, -B/--before-context <n>, --max-columns <n>
+Anything else, a path included, fails with E_BAD_ARGS.`,
 		Example: `  ksrc-native search 'class platform/UIKit/UIApplication ' --module kn.platform:UIKit
   ksrc-native search 'fun dataTaskWithURL' --module kn.platform:Foundation --context 2
   ksrc-native search 'fun <R> memScoped' --module kn.stdlib:native

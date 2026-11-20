@@ -51,7 +51,40 @@ Alias: `rg`. Runs ripgrep over the modules.
 | `--module`, `-m` | module to search; repeatable |
 | `--all-platform` | build and search every platform library of the target |
 | `--context`, `-C` | lines of context around each match |
-| `-- <rg-args>` | everything after `--` goes to ripgrep, for example `-i`, `-F`, `-g '*Delegate*'` |
+| `-- <rg-args>` | ripgrep arguments from the allow-list below, for example `-i`, `-F`, `-g '*Delegate*'` |
+
+Arguments after `--` are checked before anything runs. These pass:
+
+| Argument | Meaning in ripgrep |
+| --- | --- |
+| `-i`, `--ignore-case` | ignore case |
+| `-s`, `--case-sensitive` | match case |
+| `-S`, `--smart-case` | ignore case unless the pattern has an upper-case letter |
+| `-F`, `--fixed-strings` | the pattern is a literal string |
+| `-w`, `--word-regexp` | match whole words |
+| `-x`, `--line-regexp` | match whole lines |
+| `-v`, `--invert-match` | print the lines that do not match |
+| `-U`, `--multiline` | let a match span lines |
+| `--multiline-dotall` | with `-U`, let `.` match a line break |
+| `-P`, `--pcre2` | use the PCRE2 engine |
+| `-g <glob>`, `--glob <glob>` | only files whose name matches the glob; `!` negates |
+| `--iglob <glob>` | the same, ignoring case |
+| `-m <n>`, `--max-count <n>` | at most `n` matching lines per file |
+| `-A <n>`, `--after-context <n>` | `n` lines after each match |
+| `-B <n>`, `--before-context <n>` | `n` lines before each match |
+| `--max-columns <n>` | leave out lines longer than `n` bytes |
+
+A value is written as `--flag value`, `--flag=value` or `-g value`. Short flags
+without a value can be joined: `-iF`. A number is a non-negative integer.
+
+Everything else fails with `E_BAD_ARGS` and a hint that lists the table above:
+an unknown flag, a flag that changes the output (`-l`, `-c`, `--files`,
+`--no-json`, `--vimgrep`), `--pre`, `--pre-glob`, `-f`, `-L`, `--hidden`, `-u`,
+`--no-ignore`, `-z`, a path, a second `--`, a flag without its value. Use
+`--context` of ksrc-native in place of rg's `-C`.
+
+The pattern is passed to ripgrep as a pattern whatever it looks like. The
+user's ripgrep configuration file is not read.
 
 Without `--module`, the cached platform dumps of the target and the stdlib are
 searched. Nothing is built. If neither exists, the command fails with
@@ -166,7 +199,7 @@ to stdout.
 | `E_BAD_COORD` | a coordinate cannot be parsed, has an unknown group, or versions disagree |
 | `E_BAD_FILE_ID` | a file-id cannot be parsed |
 | `E_BAD_LINES` | the `--lines` range cannot be parsed |
-| `E_BAD_ARGS` | wrong arguments, an unknown flag or command |
+| `E_BAD_ARGS` | wrong arguments, an unknown flag or command, an rg argument that is not allowed |
 | `E_KLIB_FAILED` | the `klib` tool failed, usually because no JDK is on `PATH` |
 | `E_DUMP_FORMAT` | the `klib` output is not a metadata dump the tool understands |
 | `E_RG_FAILED` | ripgrep failed, usually because of a bad pattern or argument |
@@ -222,7 +255,7 @@ Inputs per tool:
 | `search` | `modules` | array of strings | no | `--module`, repeated |
 | `search` | `all_platform` | boolean | no | `--all-platform` |
 | `search` | `context` | integer | no | `--context` |
-| `search` | `rg_args` | array of strings | no | the arguments after `--` |
+| `search` | `rg_args` | array of strings | no | the arguments after `--`, one item per word, same allow-list |
 | `cat` | `file_id` | string | yes | the file-id argument |
 | `cat` | `lines` | string | no | `--lines` |
 | `cat` | `line_numbers` | boolean | no | `--line-numbers` |

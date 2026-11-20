@@ -177,7 +177,9 @@ public open class platform/UIKit/UIApplication : platform/UIKit/UIResponder {
 ```
 
 Quote a file-id: it contains `!`. A pattern is a ripgrep regular expression.
-Arguments after `--` go to ripgrep.
+Arguments after `--` go to ripgrep. Only a fixed list passes: `-i`, `-F`,
+`-w`, `-g <glob>`, `--max-count <n>` and a few more. A path or any other flag
+fails with `E_BAD_ARGS`. The full list is in [docs/cli-api.md](docs/cli-api.md).
 
 ### Platform APIs: `kn.platform`
 

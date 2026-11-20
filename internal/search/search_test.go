@@ -83,17 +83,9 @@ func TestRunMapsRipgrepJSONToFileIDs(t *testing.T) {
 	if calls[0].Path != "/fake/bin/rg" {
 		t.Errorf("rg path = %q", calls[0].Path)
 	}
-	wantArgs := "--json --no-config --no-ignore --sort path --context 1 --regexp class platform/UIKit/UIApplication -- /cache/aaa/src /cache/bbb/src"
+	wantArgs := "--json --no-config --no-ignore --sort path --context 1 --regexp=class platform/UIKit/UIApplication -- /cache/aaa/src /cache/bbb/src"
 	if gotArgs := strings.Join(calls[0].Args, " "); gotArgs != wantArgs {
 		t.Errorf("rg args = %q\nwant      %q", gotArgs, wantArgs)
-	}
-}
-
-func TestRgArgsPlaceExtraArgumentsBeforeThePattern(t *testing.T) {
-	got := rgArgs(Options{Pattern: "-weird", Roots: roots[:1], ExtraArgs: []string{"-i", "-F"}})
-	want := "--json --no-config --no-ignore --sort path -i -F --regexp -weird -- /cache/aaa/src"
-	if strings.Join(got, " ") != want {
-		t.Errorf("rgArgs() = %q, want %q", strings.Join(got, " "), want)
 	}
 }
 
@@ -132,8 +124,10 @@ func TestRunErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("an extra argument switched JSON off", func(t *testing.T) {
-		_, err := Run(ctx, scripted("/cache/aaa/src/ios_arm64/UIApplication.kt\n", nil), Options{Pattern: "x", Roots: roots, ExtraArgs: []string{"-l"}}, collect(new([]Line)))
+	// The allow-list keeps output-mode flags away from rg; this is the last
+	// line of defence behind it.
+	t.Run("rg printed something that is not JSON", func(t *testing.T) {
+		_, err := Run(ctx, scripted("/cache/aaa/src/ios_arm64/UIApplication.kt\n", nil), Options{Pattern: "x", Roots: roots}, collect(new([]Line)))
 		if errs.Code(err) != errs.BadArgs || !strings.Contains(err.Error(), "not JSON") {
 			t.Errorf("error = %v, want %s", err, errs.BadArgs)
 		}
@@ -168,16 +162,6 @@ func TestMultiLineMatchYieldsOneLinePerSourceLine(t *testing.T) {
 	}
 	if Format(got[0]) != "kn.platform:UIKit:2.4.21!/ios_arm64/A.kt 4:7:class A {" || Format(got[1]) != "kn.platform:UIKit:2.4.21!/ios_arm64/A.kt 5:1:  fun b()" {
 		t.Errorf("lines = %q and %q", Format(got[0]), Format(got[1]))
-	}
-}
-
-func TestFileIDForPathOutsideTheRoots(t *testing.T) {
-	if got := fileIDFor("/elsewhere/A.kt", roots); got != "/elsewhere/A.kt" {
-		t.Errorf("fileIDFor() = %q, want the path unchanged", got)
-	}
-	// A sibling directory that shares the root's name as a prefix is outside.
-	if got := fileIDFor("/cache/aaa/src-other/A.kt", roots); got != "/cache/aaa/src-other/A.kt" {
-		t.Errorf("fileIDFor() = %q, want the path unchanged", got)
 	}
 }
 
