@@ -2,7 +2,9 @@ package provider
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Request asks a provider for the sources of one module.
@@ -22,6 +24,34 @@ type Source struct {
 // FileID returns the file-id of a path below Root, given relative to it.
 func (s Source) FileID(rel string) string {
 	return FileID{Coordinate: s.Coordinate, Inner: filepath.ToSlash(rel)}.String()
+}
+
+// File returns the path of the regular file that an inner path names, and
+// false when there is none below Root.
+//
+// ParseFileID already keeps an inner path below the root. This is the second
+// check, at the place where a file is opened, so that one mistake in the
+// parser does not let a file-id read any file of the user. It compares real
+// paths: a symbolic link inside the root that points outside is refused too.
+// ripgrep does not follow such a link either, so no search prints a file-id
+// that this refuses.
+func (s Source) File(inner string) (string, bool) {
+	root, err := filepath.EvalSymlinks(s.Root)
+	if err != nil {
+		return "", false
+	}
+	path, err := filepath.EvalSymlinks(filepath.Join(s.Root, filepath.FromSlash(inner)))
+	if err != nil {
+		return "", false
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", false
+	}
+	if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
+		return "", false
+	}
+	return path, true
 }
 
 // Location says where the data of a module comes from, without preparing it

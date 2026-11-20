@@ -3,8 +3,6 @@ package adapter
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/satanyakiv/ksrc-native/internal/cat"
@@ -62,8 +60,10 @@ func (a *Adapter) cat(ctx context.Context, req CatRequest) error {
 		return err
 	}
 
-	path := filepath.Join(src.Root, filepath.FromSlash(id.Inner))
-	if info, err := os.Stat(path); err != nil || info.IsDir() {
+	// A path that leaves the root gets the answer of a missing file: the
+	// message must not say whether a file outside exists.
+	path, ok := src.File(id.Inner)
+	if !ok {
 		return errs.New(errs.NoFile,
 			fmt.Sprintf("%s has no file %s", src.Coordinate, id.Inner),
 			fmt.Sprintf("find the file with: ksrc-native search '<pattern>' --module %s", src.Coordinate))

@@ -176,6 +176,11 @@ For `kn.platform` the first path segment is the target, so `--target` is not
 needed. The segment must be the exact name of a target, like `--target`.
 `cat` builds a missing dump the same way `search` does.
 
+The inner path never leaves the module: `..` segments and a leading `/` are
+resolved inside it, and a file is printed only when its real path is below
+the root of the module. Anything else is `E_NO_FILE`, the same answer as for
+a file that does not exist.
+
 ### `deps`
 
 Lists what can be searched, one module per line:

@@ -232,6 +232,15 @@ typed exactly; `deps` with a target the distribution does not have now fails
 where it used to list the SDKs and skip the rest. An SDK outside Xcode cannot
 be named by its path.
 
+**Added on 2026-11-20.** `cat` checks the path a second time, where the file
+is opened: `provider.Source.File` resolves symbolic links and returns a file
+only when its real path is below the real root of the module. The first
+check, in `ParseFileID`, was the only one, and a test that removed it read
+`/etc/passwd` through both the stdlib and the SDK root. A path that leaves
+the root gets the answer of a missing file, `E_NO_FILE`. A symbolic link
+inside a root that points outside is refused as well; ripgrep does not
+follow such a link, so no search prints a file-id for it.
+
 ## 2026-11-20: Every program has a deadline and dies with its children
 
 **Decision.** `executil.OS` starts each program in a process group of its own.
