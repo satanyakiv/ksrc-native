@@ -355,4 +355,10 @@ These are known and left as they are for the first release.
   again or until `clean`.** `clean` marks such an entry in its list and
   `doctor` counts them in its `cache` line, so the wasted space can be seen.
   Nothing removes them without one of those two events.
+- **A platform library with no declarations is dumped again on every
+  `--all-platform` run.** An empty dump is not cached. In Kotlin 2.4.21 four
+  `ios_arm64` libraries are empty: `CoreAudio`, `ExtensionFoundation`,
+  `MobileCoreServices` and `_CoreData_CloudKit`. A full run over the 177
+  libraries took 100 s on an Apple silicon Mac, a few seconds of it for these
+  four; a search with `--module` reports them with `E_NO_SOURCES`.
 - **The binaries are not signed or notarized.**
