@@ -136,7 +136,8 @@ func (s Store) Ensure(namespace, key string, build func(srcDir string) (Meta, er
 		if e, ok := readEntry(dir); ok {
 			return e, nil
 		}
-		// A directory without meta.json is a leftover; replace it.
+		// A directory without meta.json or without sources is not an entry;
+		// replace it.
 		if rmErr := os.RemoveAll(dir); rmErr != nil {
 			return Entry{}, cacheError(rmErr, dir)
 		}
@@ -309,7 +310,25 @@ func readEntry(dir string) (Entry, bool) {
 	if err := json.Unmarshal(data, &meta); err != nil {
 		return Entry{}, false
 	}
-	return Entry{Dir: dir, Src: filepath.Join(dir, srcDir), Meta: meta}, true
+	src := filepath.Join(dir, srcDir)
+	if !hasContent(src) {
+		return Entry{}, false
+	}
+	return Entry{Dir: dir, Src: src, Meta: meta}, true
+}
+
+// hasContent reports whether dir is a directory with at least one name in
+// it. A build never leaves the sources empty, so an entry without them was
+// damaged after it was written, and serving it would give "no matches" for
+// ever. One name is read, not the whole directory.
+func hasContent(dir string) bool {
+	f, err := os.Open(dir)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	names, err := f.Readdirnames(1)
+	return err == nil && len(names) == 1
 }
 
 func cacheError(err error, path string) error {

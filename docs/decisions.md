@@ -71,7 +71,8 @@ directory name is what Gradle uses and what the user expects to see.
 **Decision.** A platform dump is keyed by the real path of the klib and its
 `compiler_version`. The extracted stdlib is keyed by the real path, size and
 modification time of the zip. An entry is written to a temporary directory and
-renamed into place; `meta.json` marks it complete.
+renamed into place; `meta.json` marks it complete. An entry that has lost its
+`src` directory, or everything in it, counts as absent and is built again.
 
 **Why.** The path holds the Kotlin version, the target and the framework, so
 each combination has its own entry. A distribution replaced in place gets a

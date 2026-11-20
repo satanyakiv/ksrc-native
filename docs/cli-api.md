@@ -342,7 +342,9 @@ cache.
 cut to 200 and gets a dash and 8 hex digits of a hash; the file content keeps
 the full name, so a search for it still hits.
 
-`meta.json` marks an entry as complete. An entry is built in a temporary
+`meta.json` marks an entry as complete. An entry whose `src` directory is
+missing or empty is not used: `clean` and `doctor` do not count it, and the
+next use of its library builds it again. An entry is built in a temporary
 sibling directory, `.tmp-<random>`, and renamed into place. A name that
 starts with a dot is never read as an entry. A build removes the temporary
 directories that are older than one hour: they are what a killed build left

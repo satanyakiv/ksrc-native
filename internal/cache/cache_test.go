@@ -145,6 +145,63 @@ func TestEnsureReplacesAnEntryWithoutMeta(t *testing.T) {
 	}
 }
 
+// An entry is ready when it has its sources, not when it has a meta.json:
+// the sources can be lost to a cleaner or to a hand that removed a part of
+// the cache. Such an entry is not served, not listed, and is built again.
+func TestAnEntryWithoutSourcesIsBuiltAgain(t *testing.T) {
+	tests := []struct {
+		name   string
+		damage func(t *testing.T, e Entry)
+	}{
+		{"the source directory is gone", func(t *testing.T, e Entry) {
+			if err := os.RemoveAll(e.Src); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"the source directory is empty", func(t *testing.T, e Entry) {
+			if err := os.Remove(filepath.Join(e.Src, "First.kt")); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"a file is in place of the source directory", func(t *testing.T, e Entry) {
+			if err := os.RemoveAll(e.Src); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(e.Src, []byte("not a directory\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := Store{Root: t.TempDir()}
+			first, err := store.Ensure("ns-v1", "key", writeOne("First.kt", "first\n"))
+			if err != nil {
+				t.Fatalf("Ensure() error = %v", err)
+			}
+			tt.damage(t, first)
+
+			if e, ok := store.Get("ns-v1", "key"); ok {
+				t.Errorf("Get() = %+v, true; want no entry while the sources are missing", e)
+			}
+			if list := store.List("ns-v1"); len(list) != 0 {
+				t.Errorf("List() = %d entries, want 0 while the sources are missing", len(list))
+			}
+
+			again, err := store.Ensure("ns-v1", "key", writeOne("Second.kt", "second\n"))
+			if err != nil {
+				t.Fatalf("Ensure() after the damage: error = %v", err)
+			}
+			if data, err := os.ReadFile(filepath.Join(again.Src, "Second.kt")); err != nil || string(data) != "second\n" {
+				t.Errorf("Ensure() after the damage did not build again: read Second.kt = %q, %v", data, err)
+			}
+			if _, ok := store.Get("ns-v1", "key"); !ok {
+				t.Error("Get() after the second build = false, want the entry")
+			}
+		})
+	}
+}
+
 func TestEnsureReportsAnUnwritableRoot(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(file, nil, 0o644); err != nil {
