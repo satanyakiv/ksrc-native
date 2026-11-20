@@ -72,7 +72,7 @@ func (a *Adapter) search(ctx context.Context, req SearchRequest) error {
 	}
 
 	out := bufio.NewWriter(a.Stdout)
-	printer := &linePrinter{out: out, context: req.Context > 0}
+	printer := &linePrinter{out: out, context: req.Context > 0 || search.AsksForContext(req.RgArgs)}
 	matches, err := search.Run(ctx, a.runner(), search.Options{
 		Pattern:   req.Pattern,
 		Roots:     roots,

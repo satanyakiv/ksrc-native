@@ -154,6 +154,26 @@ func NormalizeExtraArgs(args []string) ([]string, error) {
 	return out, nil
 }
 
+// AsksForContext reports whether the extra rg arguments ask for lines around
+// a match (-A or -B with a count above zero). Arguments that do not pass
+// NormalizeExtraArgs ask for nothing.
+func AsksForContext(args []string) bool {
+	normalized, err := NormalizeExtraArgs(args)
+	if err != nil {
+		return false
+	}
+	for _, arg := range normalized {
+		name, value, _ := strings.Cut(strings.TrimPrefix(arg, "--"), "=")
+		if name != "after-context" && name != "before-context" {
+			continue
+		}
+		if n, err := strconv.Atoi(value); err == nil && n > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // withValue renders "--flag=value" after checking the value. spelled is the
 // flag as the caller wrote it, for the message.
 func withValue(flag extraFlag, spelled, value string) (string, error) {

@@ -185,6 +185,41 @@ func TestSearchContextAndRgArgs(t *testing.T) {
 	}
 }
 
+// Context lines that come from -A or -B of rg are groups like those of
+// --context, so they get the same "--" between them.
+func TestSearchSeparatesTheContextGroupsOfRgArgs(t *testing.T) {
+	tests := []struct {
+		name   string
+		rgArgs []string
+		want   bool
+	}{
+		{"after context", []string{"-A", "1"}, true},
+		{"before context", []string{"--before-context=1"}, true},
+		{"after context of zero", []string{"-A", "0"}, false},
+		{"no context", []string{"-i"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := newWorld(t)
+			err := w.a.Search(context.Background(), SearchRequest{
+				Pattern: "companion object platform",
+				Modules: []string{unModule},
+				RgArgs:  tt.rgArgs,
+			})
+			if err != nil {
+				t.Fatalf("Search(%v) error = %v", tt.rgArgs, err)
+			}
+			out := w.stdout.String()
+			if strings.Count(out, ":14:public final companion object") < 2 {
+				t.Fatalf("Search(%v) printed fewer than two matches, the test needs two groups:\n%s", tt.rgArgs, out)
+			}
+			if got := strings.Contains(out, "\n--\n"); got != tt.want {
+				t.Errorf("Search(%v) separator between the groups = %v, want %v:\n%s", tt.rgArgs, got, tt.want, out)
+			}
+		})
+	}
+}
+
 func TestSearchVersionSelection(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()

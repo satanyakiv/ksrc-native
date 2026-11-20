@@ -134,8 +134,9 @@ Output, one line per match:
 ```
 
 A context line is `<file-id> <line>-<text>`. A line `--` separates groups of
-lines that are not adjacent. Lines and columns start at 1; the column counts
-bytes.
+lines that are not adjacent, whether the context comes from `--context` or
+from `-A` and `-B` after the `--`. Lines and columns start at 1; the column
+counts bytes.
 
 No match is a success: stdout is empty, stderr gets
 `ksrc-native: no matches for "<pattern>" in <modules>`, and the exit code is 0.

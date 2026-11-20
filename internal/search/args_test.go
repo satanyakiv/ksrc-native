@@ -300,3 +300,29 @@ func hasPCRE2() bool {
 	var out strings.Builder
 	return (executil.OS{}).Run(context.Background(), executil.Command{Path: rg, Args: []string{"--pcre2-version"}, Stdout: &out}) == nil
 }
+
+func TestAsksForContext(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{"nothing", nil, false},
+		{"flags without context", []string{"-i", "-g", "*.kt", "--max-count", "2"}, false},
+		{"short after", []string{"-A", "2"}, true},
+		{"short before", []string{"-B", "1"}, true},
+		{"long after with =", []string{"--after-context=3"}, true},
+		{"long before with a value", []string{"--before-context", "3"}, true},
+		{"zero lines", []string{"-A", "0", "-B", "0"}, false},
+		{"zero then more", []string{"-A", "0", "-B", "2"}, true},
+		{"a glob that looks like the flag", []string{"-g", "--after-context=2"}, false},
+		{"arguments that are not allowed", []string{"--pre", "x", "-A", "2"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := AsksForContext(tt.args); got != tt.want {
+				t.Errorf("AsksForContext(%q) = %v, want %v", tt.args, got, tt.want)
+			}
+		})
+	}
+}
