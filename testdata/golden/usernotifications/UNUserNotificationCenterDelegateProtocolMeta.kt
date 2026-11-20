@@ -1,0 +1,3 @@
+@kotlinx/cinterop/ExternalObjCClass(protocolGetter = "kniprot_platform_UserNotifications_UNUserNotificationCenterDelegate_0")
+public abstract interface platform/UserNotifications/UNUserNotificationCenterDelegateProtocolMeta : platform/darwin/NSObjectProtocolMeta {
+}

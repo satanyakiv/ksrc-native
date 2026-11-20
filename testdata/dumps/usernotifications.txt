@@ -1,0 +1,199 @@
+library {
+  // module name: <org.jetbrains.kotlin.native.platform.UserNotifications>
+
+  library fragment {
+    // package name: platform
+
+    package {
+    }
+  }
+
+  library fragment {
+    // package name: platform.UserNotifications
+
+    // class name: platform/UserNotifications/UNUserNotificationCenterDelegateProtocolMeta
+    // class name: platform/UserNotifications/UNUserNotificationCenterDelegateProtocol
+    // class name: platform/UserNotifications/UNNotificationMeta
+    // class name: platform/UserNotifications/UNNotification
+    // class name: platform/UserNotifications/UNNotification.Companion
+    // class name: platform/UserNotifications/UNShowPreviewsSetting
+    // class name: platform/UserNotifications/UNShowPreviewsSetting.Var
+    // class name: platform/UserNotifications/UNShowPreviewsSetting.Var.Companion
+    // class name: platform/UserNotifications/UNShowPreviewsSetting.Companion
+
+    @kotlinx/cinterop/ExternalObjCClass(protocolGetter = "kniprot_platform_UserNotifications_UNUserNotificationCenterDelegate_0")
+    public abstract interface platform/UserNotifications/UNUserNotificationCenterDelegateProtocolMeta : platform/darwin/NSObjectProtocolMeta {
+    }
+
+    @kotlinx/cinterop/ExternalObjCClass(protocolGetter = "kniprot_platform_UserNotifications_UNUserNotificationCenterDelegate_0")
+    public abstract interface platform/UserNotifications/UNUserNotificationCenterDelegateProtocol : platform/darwin/NSObjectProtocol {
+
+      @kotlinx/cinterop/ObjCMethod(selector = "userNotificationCenter:willPresentNotification:withCompletionHandler:", encoding = "v40@0:8@16@24@?32", isStret = false)
+      public open fun userNotificationCenter(center: platform/UserNotifications/UNUserNotificationCenter, willPresentNotification: platform/UserNotifications/UNNotification, withCompletionHandler: kotlin/Function1<kotlin/ULong /* = platform/UserNotifications/UNNotificationPresentationOptions^ */, kotlin/Unit>): kotlin/Unit
+
+      @kotlinx/cinterop/ObjCMethod(selector = "userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:", encoding = "v40@0:8@16@24@?32", isStret = false)
+      public open fun userNotificationCenter(center: platform/UserNotifications/UNUserNotificationCenter, didReceiveNotificationResponse: platform/UserNotifications/UNNotificationResponse, withCompletionHandler: kotlin/Function0<kotlin/Unit>): kotlin/Unit
+
+      @kotlinx/cinterop/ObjCMethod(selector = "userNotificationCenter:openSettingsForNotification:", encoding = "v32@0:8@16@24", isStret = false)
+      public open fun userNotificationCenter(center: platform/UserNotifications/UNUserNotificationCenter, openSettingsForNotification: platform/UserNotifications/UNNotification?): kotlin/Unit
+    }
+
+    @kotlinx/cinterop/ExternalObjCClass
+    public open class platform/UserNotifications/UNNotificationMeta : platform/darwin/NSObjectMeta, platform/Foundation/NSCopyingProtocolMeta, platform/Foundation/NSSecureCodingProtocolMeta {
+
+      protected /* secondary */ constructor()
+
+      @kotlinx/cinterop/ObjCMethod(selector = "new", encoding = "@16@0:8", isStret = false)
+      public open external fun new(): platform/UserNotifications/UNNotification?
+
+      @kotlinx/cinterop/ObjCMethod(selector = "allocWithZone:", encoding = "@24@0:8^{_NSZone=}16", isStret = false)
+      @kotlin/Deprecated(message = "Use constructor or factory method instead", replaceWith = kotlin/ReplaceWith(imports = [], expression = ""), level = kotlin/DeprecationLevel.WARNING)
+      public open external fun allocWithZone(zone: kotlinx/cinterop/CPointer<cnames/structs/_NSZone>?): platform/UserNotifications/UNNotification?
+
+      @kotlinx/cinterop/ObjCMethod(selector = "alloc", encoding = "@16@0:8", isStret = false)
+      @kotlin/Deprecated(message = "Use constructor or factory method instead", replaceWith = kotlin/ReplaceWith(imports = [], expression = ""), level = kotlin/DeprecationLevel.WARNING)
+      public open external fun alloc(): platform/UserNotifications/UNNotification?
+
+      @kotlinx/cinterop/ObjCMethod(selector = "supportsSecureCoding", encoding = "B16@0:8", isStret = false)
+      public open external fun supportsSecureCoding(): kotlin/Boolean
+    }
+
+    @kotlinx/cinterop/ExternalObjCClass
+    public open class platform/UserNotifications/UNNotification : platform/darwin/NSObject, platform/Foundation/NSCopyingProtocol, platform/Foundation/NSSecureCodingProtocol {
+
+      @kotlinx/cinterop/ObjCUnavailable
+      @kotlin/Deprecated(message = "This Objective-C declaration is unavailable", replaceWith = kotlin/ReplaceWith(imports = [], expression = ""), level = kotlin/DeprecationLevel.WARNING)
+      @kotlinx/cinterop/ObjCConstructor(designated = true, initSelector = "init")
+      public /* secondary */ constructor()
+
+      @kotlinx/cinterop/ObjCConstructor(designated = true, initSelector = "initWithCoder:")
+      public /* secondary */ constructor(coder: platform/Foundation/NSCoder)
+
+      @kotlinx/cinterop/ObjCMethod(selector = "date", encoding = "@16@0:8", isStret = false)
+      public open external fun date(): platform/Foundation/NSDate
+
+      @kotlinx/cinterop/ObjCMethod(selector = "request", encoding = "@16@0:8", isStret = false)
+      public open external fun request(): platform/UserNotifications/UNNotificationRequest
+
+      @kotlin/Deprecated(message = "Use constructor instead", replaceWith = kotlin/ReplaceWith(imports = [], expression = "UNNotification()"), level = kotlin/DeprecationLevel.ERROR)
+      @kotlinx/cinterop/ObjCMethod(selector = "init", encoding = "@16@0:8", isStret = false)
+      @kotlinx/cinterop/internal/CCall.ConsumesReceiver
+      @kotlinx/cinterop/internal/CCall.ReturnsRetained
+      @kotlinx/cinterop/ObjCUnavailable
+      public open external fun init(): platform/UserNotifications/UNNotification?
+
+      @kotlin/Deprecated(message = "Use constructor instead", replaceWith = kotlin/ReplaceWith(imports = [], expression = "UNNotification(coder)"), level = kotlin/DeprecationLevel.ERROR)
+      @kotlinx/cinterop/ObjCMethod(selector = "initWithCoder:", encoding = "@24@0:8@16", isStret = false)
+      @kotlinx/cinterop/internal/CCall.ConsumesReceiver
+      @kotlinx/cinterop/internal/CCall.ReturnsRetained
+      public open external fun initWithCoder(coder: platform/Foundation/NSCoder): platform/UserNotifications/UNNotification?
+
+      @kotlinx/cinterop/ObjCMethod(selector = "copyWithZone:", encoding = "@24@0:8^{_NSZone=}16", isStret = false)
+      @kotlinx/cinterop/internal/CCall.ReturnsRetained
+      public open external fun copyWithZone(zone: kotlinx/cinterop/CPointer<cnames/structs/_NSZone /* = platform/Foundation/NSZone^ */>?): kotlin/Any
+
+      @kotlinx/cinterop/ObjCMethod(selector = "encodeWithCoder:", encoding = "v24@0:8@16", isStret = false)
+      public open external fun encodeWithCoder(coder: platform/Foundation/NSCoder): kotlin/Unit
+
+      public final val date: platform/Foundation/NSDate
+        @kotlinx/cinterop/ObjCMethod(selector = "date", encoding = "@16@0:8", isStret = false)
+        public final /* non-default */ external get
+
+      public final val request: platform/UserNotifications/UNNotificationRequest
+        @kotlinx/cinterop/ObjCMethod(selector = "request", encoding = "@16@0:8", isStret = false)
+        public final /* non-default */ external get
+
+      // companion object: Companion
+
+      // nested class: Companion
+    }
+
+    public final companion object platform/UserNotifications/UNNotification.Companion : platform/UserNotifications/UNNotificationMeta, kotlinx/cinterop/ObjCClassOf<platform/UserNotifications/UNNotification> {
+
+      private constructor()
+    }
+
+    public final enum class platform/UserNotifications/UNShowPreviewsSetting : kotlin/Enum<platform/UserNotifications/UNShowPreviewsSetting>, kotlinx/cinterop/CEnum {
+
+      private constructor(value: kotlin/Long /* = platform/darwin/NSInteger^ */)
+
+      public open val value: kotlin/Long /* = platform/darwin/NSInteger^ */
+        public open /* non-default */ get
+
+      // companion object: Companion
+
+      // nested class: Var
+
+      // nested class: Companion
+
+      @kotlinx/cinterop/internal/ConstantValue.Long(value = 0L)
+      UNShowPreviewsSettingAlways,
+
+      @kotlinx/cinterop/internal/ConstantValue.Long(value = 1L)
+      UNShowPreviewsSettingWhenAuthenticated,
+
+      @kotlinx/cinterop/internal/ConstantValue.Long(value = 2L)
+      UNShowPreviewsSettingNever,
+
+      // has Enum.entries
+    }
+
+    public final class platform/UserNotifications/UNShowPreviewsSetting.Var : kotlinx/cinterop/CEnumVar {
+
+      public constructor(rawPtr: kotlin/native/internal/NativePtr /* = kotlinx/cinterop/NativePtr^ */)
+
+      public final var value: platform/UserNotifications/UNShowPreviewsSetting
+        public final /* non-default */ external get
+        public final /* non-default */ external set(value: platform/UserNotifications/UNShowPreviewsSetting)
+
+      // companion object: Companion
+
+      // nested class: Companion
+    }
+
+    @kotlinx/cinterop/internal/CEnumVarTypeSize(size = 8)
+    @kotlin/Deprecated(message = "Use sizeOf<T>() or alignOf<T>() instead.", replaceWith = kotlin/ReplaceWith(imports = [], expression = ""), level = kotlin/DeprecationLevel.WARNING)
+    public final companion object platform/UserNotifications/UNShowPreviewsSetting.Var.Companion : kotlinx/cinterop/CPrimitiveVar.Type {
+
+      private constructor()
+    }
+
+    public final companion object platform/UserNotifications/UNShowPreviewsSetting.Companion {
+
+      private constructor()
+
+      @kotlin/Deprecated(message = "Will be removed.", replaceWith = kotlin/ReplaceWith(imports = [], expression = ""), level = kotlin/DeprecationLevel.WARNING)
+      public final fun byValue(value: kotlin/Long /* = platform/darwin/NSInteger^ */): platform/UserNotifications/UNShowPreviewsSetting
+    }
+
+    package {
+
+      public typealias UNNotificationSoundNameVar = kotlinx/cinterop/ObjCObjectVar<platform/UserNotifications/UNNotificationSoundName^> /* = kotlinx/cinterop/ObjCObjectVar<kotlin/String? /* = platform/UserNotifications/UNNotificationSoundName^ */> */
+
+      public typealias UNNotificationSoundName = kotlin/String? /* = kotlin/String? */
+
+      public typealias UNNotificationPresentationOptions = platform/darwin/NSUInteger^ /* = kotlin/ULong /* = platform/darwin/NSUInteger^ */ */
+    }
+  }
+
+  library fragment {
+    // package name: platform.UserNotifications
+
+    package {
+
+      @kotlinx/cinterop/ObjCMethod(selector = "localizedUserNotificationStringForKey:arguments:", encoding = "@32@0:8@16@24", isStret = false)
+      public final external fun platform/Foundation/NSStringMeta.localizedUserNotificationStringForKey(key: kotlin/String, arguments: kotlin/collections/List<*>?): kotlin/String
+
+      public final val UNAuthorizationOptionNone: kotlin/ULong /* = platform/UserNotifications/UNAuthorizationOptions^ */
+        @kotlinx/cinterop/internal/CCall(id = "knifunptr_platform_UserNotifications_UNAuthorizationOptionNone_getter_0")
+        public final /* non-default */ external get
+
+      public final val UNErrorDomain: kotlin/String?
+        @kotlinx/cinterop/internal/CCall(id = "knifunptr_platform_UserNotifications_UNErrorDomain_getter_0")
+        public final /* non-default */ external get
+
+      public final const val UNNotificationPresentationOptionBanner: kotlin/ULong /* = platform/UserNotifications/UNNotificationPresentationOptions^ */ /* = 16uL */
+        public final get
+    }
+  }
+}
