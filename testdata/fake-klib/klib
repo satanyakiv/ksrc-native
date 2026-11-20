@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Fake `klib` tool for tests. It stands in for <konanHome>/bin/klib, so tests
+# need no Kotlin/Native distribution and no JVM.
+#
+#   klib dump-metadata <library path>
+#
+# prints the file `dump-metadata.txt` stored inside the library directory.
+# Every call is appended to `klib-calls.log` next to the `bin` directory, so a
+# test can assert how many times the tool ran.
+set -euo pipefail
+
+dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "$*" >> "$dir/../klib-calls.log"
+
+if [ "${1:-}" != "dump-metadata" ] || [ -z "${2:-}" ]; then
+  echo "fake klib: unsupported arguments: $*" >&2
+  exit 64
+fi
+
+fixture="$2/dump-metadata.txt"
+if [ ! -f "$fixture" ]; then
+  echo "error: library not found: $2" >&2
+  exit 1
+fi
+
+cat "$fixture"
