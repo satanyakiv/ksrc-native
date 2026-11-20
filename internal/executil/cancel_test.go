@@ -122,16 +122,34 @@ func TestOSRunCancelStopsTheWholeProcessTree(t *testing.T) {
 	}
 }
 
-// The deadline is long enough for the scripts to start on a loaded machine:
-// the first run of a new script can take hundreds of milliseconds on macOS.
+// passedDeadline is a context whose deadline passes when the test closes
+// done. A real timeout would also have to cover the start of the scripts,
+// which takes from milliseconds to seconds on a loaded machine: too short
+// and the tree is stopped before it exists, too long and the test is slow.
+type passedDeadline struct {
+	context.Context
+	done chan struct{}
+}
+
+func (c passedDeadline) Done() <-chan struct{} { return c.done }
+
+func (c passedDeadline) Err() error {
+	select {
+	case <-c.done:
+		return context.DeadlineExceeded
+	default:
+		return nil
+	}
+}
+
 func TestOSRunDeadlineStopsTheWholeProcessTree(t *testing.T) {
 	tr := newTree(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	ctx := passedDeadline{Context: context.Background(), done: make(chan struct{})}
 
 	done := make(chan error, 1)
 	go func() { done <- OS{}.Run(ctx, Command{Path: tr.outer}) }()
 	inner, sleeper := tr.waitForPids(t)
+	close(ctx.done)
 
 	select {
 	case err := <-done:
@@ -139,7 +157,7 @@ func TestOSRunDeadlineStopsTheWholeProcessTree(t *testing.T) {
 			t.Errorf("Run() error = %v, want one that wraps context.DeadlineExceeded", err)
 		}
 	case <-time.After(8 * time.Second):
-		t.Fatal("Run() did not return within 8 s of a 3 s deadline")
+		t.Fatal("Run() did not return within 8 s of the deadline")
 	}
 	if !gone(inner) || !gone(sleeper) {
 		t.Errorf("after the deadline: second script gone = %v, long-running program gone = %v; want both gone", gone(inner), gone(sleeper))
