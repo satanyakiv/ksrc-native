@@ -30,32 +30,33 @@ func (a *Adapter) cat(ctx context.Context, req CatRequest) error {
 	if err != nil {
 		return err
 	}
-	if err := requirePlatformGroup(id.Coordinate); err != nil {
-		return err
-	}
 	lines, err := cat.ParseLines(req.Lines)
 	if err != nil {
 		return err
 	}
-
-	// The first segment of a platform file-id is the target, so the file-id
-	// alone decides it and --target is not consulted.
-	target, _, ok := strings.Cut(id.Inner, "/")
-	if !ok {
-		return errs.New(errs.BadFileID,
-			fmt.Sprintf("the file-id %q has no target segment", req.FileID),
-			"copy a file-id from `ksrc-native search` output, for example kn.platform:UIKit:2.4.21!/ios_arm64/UIApplication.kt")
-	}
-
-	dist, err := a.distribution(req.Common, id.Coordinate.Version)
+	r, err := a.newResolver(req.Common, id.Coordinate)
 	if err != nil {
 		return err
 	}
-	platform, err := a.platform(dist)
+
+	request := r.request(id.Coordinate)
+	if id.Coordinate.Group == provider.PlatformGroup {
+		// The first segment of a platform file-id is the target, so the
+		// file-id alone decides it and --target is not consulted.
+		target, _, ok := strings.Cut(id.Inner, "/")
+		if !ok {
+			return errs.New(errs.BadFileID,
+				fmt.Sprintf("the file-id %q has no target segment", req.FileID),
+				"copy a file-id from `ksrc-native search` output, for example kn.platform:UIKit:2.4.21!/ios_arm64/UIApplication.kt")
+		}
+		request.Target = target
+	}
+
+	p, err := r.provider(id.Coordinate)
 	if err != nil {
 		return err
 	}
-	src, err := platform.Resolve(ctx, provider.Request{Coordinate: id.Coordinate, Target: target})
+	src, err := p.Resolve(ctx, request)
 	if err != nil {
 		return err
 	}
@@ -64,7 +65,7 @@ func (a *Adapter) cat(ctx context.Context, req CatRequest) error {
 	if info, err := os.Stat(path); err != nil || info.IsDir() {
 		return errs.New(errs.NoFile,
 			fmt.Sprintf("%s has no file %s", src.Coordinate, id.Inner),
-			fmt.Sprintf("find the file with: ksrc-native search '<pattern>' --module %s --target %s", src.Coordinate, target))
+			fmt.Sprintf("find the file with: ksrc-native search '<pattern>' --module %s", src.Coordinate))
 	}
 	return cat.Print(a.Stdout, path, lines, req.Numbers)
 }

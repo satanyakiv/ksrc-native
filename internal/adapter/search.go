@@ -14,10 +14,11 @@ import (
 // SearchRequest is the input of Search.
 type SearchRequest struct {
 	Common
-	Pattern string
-	Modules []string // coordinates; empty means "every cached platform dump"
-	Context int      // lines of context around each match
-	RgArgs  []string // extra arguments for rg
+	Pattern     string
+	Modules     []string // coordinates; empty means "cached platform dumps plus the stdlib"
+	AllPlatform bool     // build and search every platform library of the target
+	Context     int      // lines of context around each match
+	RgArgs      []string // extra arguments for rg
 }
 
 // Search runs a regular-expression search and prints one line per match:
@@ -43,41 +44,26 @@ func (a *Adapter) search(ctx context.Context, req SearchRequest) error {
 		return err
 	}
 
-	coords, version, err := parseModules(req.Modules)
-	if err != nil {
-		return err
-	}
-	dist, err := a.distribution(req.Common, version)
-	if err != nil {
-		return err
-	}
-	platform, err := a.platform(dist)
-	if err != nil {
-		return err
-	}
-
-	var sources []provider.Source
-	if len(coords) == 0 {
-		sources = platform.Cached(req.target())
-		if len(sources) == 0 {
-			return errs.New(errs.NoSources,
-				fmt.Sprintf("no platform library is cached yet for Kotlin %s, target %s, and no --module was given", dist.Version, req.target()),
-				"name the framework to search: ksrc-native search '<pattern>' --module kn.platform:UIKit")
-		}
-	}
-	for _, c := range coords {
-		src, err := platform.Resolve(ctx, provider.Request{Coordinate: c, Target: req.target()})
+	coords := make([]provider.Coordinate, 0, len(req.Modules))
+	for _, m := range req.Modules {
+		c, err := provider.ParseCoordinate(m)
 		if err != nil {
 			return err
 		}
-		sources = append(sources, src)
+		coords = append(coords, c)
+	}
+	r, err := a.newResolver(req.Common, coords...)
+	if err != nil {
+		return err
+	}
+	sources, err := a.searchSources(ctx, r, req, coords)
+	if err != nil {
+		return err
 	}
 
 	roots := make([]search.Root, len(sources))
-	names := make([]string, len(sources))
 	for i, s := range sources {
 		roots[i] = search.Root{Dir: s.Root, Prefix: s.FileID("")}
-		names[i] = s.Coordinate.String()
 	}
 
 	out := bufio.NewWriter(a.Stdout)
@@ -95,35 +81,109 @@ func (a *Adapter) search(ctx context.Context, req SearchRequest) error {
 		return err
 	}
 	if matches == 0 {
-		fmt.Fprintf(a.Stderr, "ksrc-native: no matches for %q in %s (%s)\n", req.Pattern, strings.Join(names, ", "), req.target())
+		fmt.Fprintf(a.Stderr, "ksrc-native: no matches for %q in %s\n", req.Pattern, describeSources(sources, req.Common))
 	}
 	return nil
 }
 
-// parseModules parses the --module values and returns the one Kotlin version
-// they name, if any.
-func parseModules(modules []string) ([]provider.Coordinate, string, error) {
-	var coords []provider.Coordinate
-	version := ""
-	for _, m := range modules {
-		c, err := provider.ParseCoordinate(m)
-		if err != nil {
-			return nil, "", err
+// searchSources decides what a search covers:
+//
+//   - the named modules, built on first use;
+//   - with --all-platform, also every platform library of the target;
+//   - without modules, the platform dumps that are already cached plus the
+//     stdlib. A search never builds all platform dumps unless asked.
+func (a *Adapter) searchSources(ctx context.Context, r *resolver, req SearchRequest, coords []provider.Coordinate) ([]provider.Source, error) {
+	var sources []provider.Source
+	seen := make(map[string]bool)
+	add := func(s provider.Source) {
+		if !seen[s.Root] {
+			seen[s.Root] = true
+			sources = append(sources, s)
 		}
-		if err := requirePlatformGroup(c); err != nil {
-			return nil, "", err
-		}
-		if c.Version != "" {
-			if version != "" && version != c.Version {
-				return nil, "", errs.New(errs.BadCoord,
-					fmt.Sprintf("the modules name two Kotlin versions, %s and %s", version, c.Version),
-					"search one Kotlin version at a time")
-			}
-			version = c.Version
-		}
-		coords = append(coords, c)
 	}
-	return coords, version, nil
+
+	for _, c := range coords {
+		p, err := r.provider(c)
+		if err != nil {
+			return nil, err
+		}
+		src, err := p.Resolve(ctx, r.request(c))
+		if err != nil {
+			return nil, err
+		}
+		add(src)
+	}
+
+	if req.AllPlatform {
+		platform, err := r.platform()
+		if err != nil {
+			return nil, err
+		}
+		if err := platform.Dist.RequireTarget(r.common.target()); err != nil {
+			return nil, err
+		}
+		for _, name := range platform.Dist.Frameworks(r.common.target()) {
+			src, err := platform.Resolve(ctx, r.request(provider.Coordinate{Group: provider.PlatformGroup, Name: name}))
+			if err != nil {
+				// A library without declarations is not a reason to stop.
+				if errs.Code(err) == errs.NoSources {
+					continue
+				}
+				return nil, err
+			}
+			add(src)
+		}
+	}
+
+	if len(coords) == 0 {
+		platform, err := r.platform()
+		if err != nil {
+			return nil, err
+		}
+		if !req.AllPlatform {
+			for _, src := range platform.Cached(r.common.target()) {
+				add(src)
+			}
+		}
+		stdlib, err := r.stdlib()
+		if err != nil {
+			return nil, err
+		}
+		if stdlib.Available() {
+			src, err := stdlib.Resolve(ctx, r.request(provider.Coordinate{Group: provider.StdlibGroup, Name: provider.StdlibName}))
+			if err != nil {
+				return nil, err
+			}
+			add(src)
+		}
+	}
+
+	if len(sources) == 0 {
+		dist, _ := r.distribution()
+		return nil, errs.New(errs.NoSources,
+			fmt.Sprintf("nothing to search: no platform library is cached for Kotlin %s, target %s, the distribution has no stdlib sources, and no --module was given", dist.Version, r.common.target()),
+			"name the framework to search: ksrc-native search '<pattern>' --module kn.platform:UIKit")
+	}
+	return sources, nil
+}
+
+// describeSources names what was searched, for the no-matches note.
+func describeSources(sources []provider.Source, c Common) string {
+	const limit = 4
+	names := make([]string, 0, len(sources))
+	platform := false
+	for _, s := range sources {
+		names = append(names, s.Coordinate.String())
+		platform = platform || s.Coordinate.Group == provider.PlatformGroup
+	}
+	text := strings.Join(names, ", ")
+	if len(names) > limit {
+		text = fmt.Sprintf("%s and %d more modules", strings.Join(names[:limit], ", "), len(names)-limit)
+	}
+	if platform {
+		text += " (" + c.target() + ")"
+	}
+	return text
 }
 
 // linePrinter writes search lines and the "--" separators between context

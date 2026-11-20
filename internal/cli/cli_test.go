@@ -14,14 +14,23 @@ import (
 )
 
 // harness runs command lines against a fake distribution whose klib tool is
-// the script in testdata/fake-klib. Only rg is real.
+// the script in testdata/fake-klib, and a fake Xcode with two SDKs. Only rg
+// is real.
 type harness struct {
-	t    *testing.T
-	a    *adapter.Adapter
-	dist testutil.Distribution
-	out  *bytes.Buffer
-	err  *bytes.Buffer
+	t        *testing.T
+	a        *adapter.Adapter
+	dist     testutil.Distribution
+	xcode    *testutil.Xcode
+	runner   *testutil.Overlay
+	cacheDir string
+	out      *bytes.Buffer
+	err      *bytes.Buffer
 }
+
+const viewControllerHeader = `@interface UIViewController : UIResponder
+- (void)presentViewController:(UIViewController *)viewControllerToPresent animated:(BOOL)flag completion:(void (^)(void))completion;
+@end
+`
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
@@ -31,19 +40,35 @@ func newHarness(t *testing.T) *harness {
 	dist := testutil.NewDistribution(t, filepath.Join(home, ".konan"), "2.4.21")
 	dist.AddPlatformKlib(t, "ios_arm64", "UserNotifications", testutil.ReadFixture(t, testutil.UserNotificationsDump))
 
-	cacheDir := filepath.Join(t.TempDir(), "cache")
-	h := &harness{t: t, dist: dist, out: &bytes.Buffer{}, err: &bytes.Buffer{}}
+	x := testutil.NewXcode(t)
+	ios := x.AddSDK(t, "iPhoneOS", "26.4")
+	x.AddHeader(t, ios, "UIKit", "UIViewController.h", viewControllerHeader)
+	x.AddSwiftOnlyFramework(t, ios, "SwiftUI")
+	mac := x.AddSDK(t, "MacOSX", "26.4")
+	x.AddVersionedHeader(t, mac, "AppKit", "NSWindow.h", "@interface NSWindow : NSResponder\n@end\n")
+
+	h := &harness{
+		t:        t,
+		dist:     dist,
+		xcode:    x,
+		runner:   &testutil.Overlay{Base: executil.OS{}, Fakes: x.Fakes()},
+		cacheDir: filepath.Join(t.TempDir(), "cache"),
+		out:      &bytes.Buffer{},
+		err:      &bytes.Buffer{},
+	}
 	h.a = &adapter.Adapter{
-		Runner: executil.OS{},
+		Runner: h.runner,
 		Stdout: h.out,
 		Stderr: h.err,
+		Stdin:  strings.NewReader(""),
 		Getenv: func(key string) string {
 			if key == cache.EnvDir {
-				return cacheDir
+				return h.cacheDir
 			}
 			return ""
 		},
-		UserHome: home,
+		UserHome:   home,
+		IsTerminal: func() bool { return false },
 	}
 	return h
 }

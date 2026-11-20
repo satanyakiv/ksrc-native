@@ -17,15 +17,23 @@ import (
 )
 
 // world is an Adapter over a fake home directory: two fake distributions with
-// the UserNotifications excerpt, the real rg and an empty cache.
+// the UserNotifications excerpt, a fake Xcode with three SDKs, the real rg
+// and an empty cache. Only rg and the fake klib script run as processes.
 type world struct {
 	a      *Adapter
 	stdout *bytes.Buffer
 	stderr *bytes.Buffer
 	old    testutil.Distribution // Kotlin 2.4.10
 	dist   testutil.Distribution // Kotlin 2.4.21, the newest
+	xcode  *testutil.Xcode
+	runner *testutil.Overlay
 	env    map[string]string
 }
+
+const viewControllerHeader = `@interface UIViewController : UIResponder
+- (void)presentViewController:(UIViewController *)viewControllerToPresent animated:(BOOL)flag completion:(void (^)(void))completion;
+@end
+`
 
 func newWorld(t *testing.T) *world {
 	t.Helper()
@@ -40,13 +48,26 @@ func newWorld(t *testing.T) *world {
 	w.dist.AddPlatformKlib(t, "ios_arm64", "UserNotifications", dump)
 	w.dist.AddPlatformKlib(t, "ios_simulator_arm64", "UserNotifications", dump)
 
+	w.xcode = testutil.NewXcode(t)
+	ios := w.xcode.AddSDK(t, "iPhoneOS", "26.4")
+	w.xcode.AddHeader(t, ios, "UIKit", "UIViewController.h", viewControllerHeader)
+	w.xcode.AddHeader(t, ios, "UIKit", "UIView.h", "@interface UIView : UIResponder\n@end\n")
+	w.xcode.AddSwiftOnlyFramework(t, ios, "SwiftUI")
+	sim := w.xcode.AddSDK(t, "iPhoneSimulator", "26.4")
+	w.xcode.AddHeader(t, sim, "UIKit", "UIViewController.h", "// simulator SDK\n"+viewControllerHeader)
+	mac := w.xcode.AddSDK(t, "MacOSX", "26.4")
+	w.xcode.AddVersionedHeader(t, mac, "AppKit", "NSWindow.h", "@interface NSWindow : NSResponder\n@end\n")
+	w.runner = &testutil.Overlay{Base: executil.OS{}, Fakes: w.xcode.Fakes()}
+
 	w.env = map[string]string{cache.EnvDir: filepath.Join(t.TempDir(), "cache")}
 	w.a = &Adapter{
-		Runner:   executil.OS{},
-		Stdout:   w.stdout,
-		Stderr:   w.stderr,
-		Getenv:   func(key string) string { return w.env[key] },
-		UserHome: home,
+		Runner:     w.runner,
+		Stdout:     w.stdout,
+		Stderr:     w.stderr,
+		Stdin:      strings.NewReader(""),
+		Getenv:     func(key string) string { return w.env[key] },
+		UserHome:   home,
+		IsTerminal: func() bool { return false },
 	}
 	return w
 }
@@ -205,7 +226,7 @@ func TestSearchErrors(t *testing.T) {
 		{"empty pattern", SearchRequest{Pattern: "  ", Modules: []string{unModule}}, errs.BadArgs, "pattern is empty"},
 		{"negative context", SearchRequest{Pattern: "x", Context: -1}, errs.BadArgs, "--context"},
 		{"unparsable module", SearchRequest{Pattern: "x", Modules: []string{"UIKit"}}, errs.BadCoord, `cannot parse the coordinate "UIKit"`},
-		{"group of a later version", SearchRequest{Pattern: "x", Modules: []string{"sdk.apple:UIKit"}}, errs.BadCoord, `unknown group "sdk.apple"`},
+		{"unknown group", SearchRequest{Pattern: "x", Modules: []string{"com.example:lib"}}, errs.BadCoord, `unknown group "com.example"`},
 		{"two versions", SearchRequest{Pattern: "x", Modules: []string{unModule + ":2.4.10", unModule + ":2.4.21"}}, errs.BadCoord, "two Kotlin versions"},
 		{"flag disagrees with the coordinate", SearchRequest{Common: Common{KotlinVersion: "2.4.21"}, Pattern: "x", Modules: []string{unModule + ":2.4.10"}}, errs.BadCoord, "disagrees"},
 		{"version that is not installed", SearchRequest{Pattern: "x", Modules: []string{unModule + ":1.9.0"}}, errs.NoKonan, "installed: 2.4.21, 2.4.10"},
@@ -316,7 +337,7 @@ func TestCatErrors(t *testing.T) {
 	}{
 		{"not a file-id", CatRequest{FileID: "UNNotification.kt"}, errs.BadFileID, "cannot parse the file-id"},
 		{"no target segment", CatRequest{FileID: "kn.platform:UserNotifications:2.4.21!/UNNotification.kt"}, errs.BadFileID, "no target segment"},
-		{"group of a later version", CatRequest{FileID: "kn.stdlib:native:2.4.21!/nativeMain/kotlin/Utils.kt"}, errs.BadCoord, `unknown group "kn.stdlib"`},
+		{"unknown group", CatRequest{FileID: "com.example:lib:1.0!/src/Main.kt"}, errs.BadCoord, `unknown group "com.example"`},
 		{"bad range", CatRequest{FileID: "kn.platform:UserNotifications:2.4.21!/ios_arm64/UNNotification.kt", Lines: "9,1"}, errs.BadLines, "cannot parse the line range"},
 		{"range past the end", CatRequest{FileID: "kn.platform:UserNotifications:2.4.21!/ios_arm64/UNNotificationMeta.kt", Lines: "900,910"}, errs.BadLines, "the file has"},
 		{"file that does not exist", CatRequest{FileID: "kn.platform:UserNotifications:2.4.21!/ios_arm64/Nope.kt"}, errs.NoFile, "has no file ios_arm64/Nope.kt"},
@@ -354,6 +375,9 @@ func TestDoctor(t *testing.T) {
 		"kotlin-native: ok - 2.4.21 at " + w.dist.Home + " (also installed: 2.4.10)",
 		"klib: ok - " + filepath.Join(w.dist.Home, "bin", "klib"),
 		"platform: ok - 1 libraries for ios_arm64 (2 targets in the distribution)",
+		"stdlib: unavailable - no sources zip at ",
+		"xcode: ok - SDK iphoneos26.4 at ",
+		"(1 frameworks with headers)",
 		"cache: ok - " + w.env[cache.EnvDir] + " (0 platform dumps, 0 B)",
 	} {
 		if !strings.Contains(out, part) {
@@ -389,6 +413,8 @@ func TestDoctorReportsWhatIsMissing(t *testing.T) {
 		"kotlin-native: MISSING - E_NO_KONAN: ",
 		"klib: MISSING - ",
 		"platform: MISSING - ",
+		"stdlib: unavailable - ",
+		"xcode: unavailable - E_NO_XCODE: ",
 		"cache: ok - ",
 	} {
 		if !strings.Contains(out, part) {

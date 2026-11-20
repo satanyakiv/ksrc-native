@@ -58,7 +58,9 @@ func TestRealDistribution(t *testing.T) {
 			}
 			return os.Getenv(key)
 		},
-		UserHome: home,
+		UserHome:   home,
+		Stdin:      strings.NewReader(""),
+		IsTerminal: func() bool { return false },
 	}
 	run := func(args ...string) (int, string, string) {
 		out.Reset()
@@ -159,4 +161,36 @@ func TestRealDistribution(t *testing.T) {
 	if code != 0 || !strings.Contains(stdout, "(4 platform dumps, ") {
 		t.Errorf("doctor: code = %d, output:\n%s", code, stdout)
 	}
+
+	t.Run("stdlib", func(t *testing.T) {
+		if _, err := os.Stat(dist.StdlibSources()); err != nil {
+			t.Skipf("the distribution has no stdlib sources: %v", err)
+		}
+		code, stdout, stderr := run("search", `fun <R> memScoped`, "--module", "kn.stdlib:native")
+		want := "kn.stdlib:native:" + dist.Version + "!/nativeMain/kotlinx/cinterop/Utils.kt "
+		if code != 0 || !strings.HasPrefix(stdout, want) {
+			t.Fatalf("code = %d, stdout = %q, stderr = %q; want a hit in %s", code, stdout, stderr, want)
+		}
+		fileID, rest, _ := strings.Cut(strings.SplitN(stdout, "\n", 2)[0], " ")
+		line, _, _ := strings.Cut(rest, ":")
+		code, stdout, _ = run("cat", fileID, "--lines", line)
+		if code != 0 || !strings.Contains(stdout, "memScoped") {
+			t.Errorf("cat --lines %s: code = %d, stdout = %q", line, code, stdout)
+		}
+	})
+
+	t.Run("apple headers", func(t *testing.T) {
+		if code, _, stderr := run("where", "sdk.apple:UIKit"); code != 0 {
+			t.Skipf("no iphoneos SDK with UIKit headers: %s", strings.TrimSpace(stderr))
+		}
+		code, stdout, stderr := run("search", "presentViewController:", "--module", "sdk.apple:UIKit", "--", "-F")
+		if code != 0 || !strings.HasPrefix(stdout, "sdk.apple:UIKit:iphoneos") || !strings.Contains(stdout, "!/UIViewController.h ") {
+			t.Fatalf("code = %d, stdout = %q, stderr = %q; want a hit in UIViewController.h", code, stdout, stderr)
+		}
+		fileID, _, _ := strings.Cut(stdout, " ")
+		code, stdout, _ = run("cat", fileID, "--lines", "1,5")
+		if code != 0 || stdout == "" {
+			t.Errorf("cat of %s: code = %d, stdout = %q", fileID, code, stdout)
+		}
+	})
 }

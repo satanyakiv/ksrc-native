@@ -13,6 +13,7 @@ import (
 	"github.com/satanyakiv/ksrc-native/internal/konan"
 	"github.com/satanyakiv/ksrc-native/internal/provider"
 	"github.com/satanyakiv/ksrc-native/internal/search"
+	"github.com/satanyakiv/ksrc-native/internal/xcode"
 )
 
 // DoctorFailed is the code Doctor returns when a check fails.
@@ -26,7 +27,12 @@ type DoctorRequest struct {
 // Doctor checks the environment and prints one line per check:
 //
 //	<name>: ok - <detail>
-//	<name>: MISSING - <what to do>
+//	<name>: MISSING - <what to do>        the tool cannot work
+//	<name>: unavailable - <what to do>    one optional source is off
+//
+// rg, the Kotlin/Native distribution, its klib tool and its platform
+// libraries are required. The stdlib sources and Xcode are optional: without
+// them kn.stdlib and sdk.apple do not work, the rest does.
 func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 	failed := 0
 	report := func(name string, ok bool, detail string) {
@@ -34,6 +40,13 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 		if !ok {
 			status = "MISSING"
 			failed++
+		}
+		fmt.Fprintf(a.Stdout, "%s: %s - %s\n", name, status, detail)
+	}
+	optional := func(name string, ok bool, detail string) {
+		status := "ok"
+		if !ok {
+			status = "unavailable"
 		}
 		fmt.Fprintf(a.Stdout, "%s: %s - %s\n", name, status, detail)
 	}
@@ -45,12 +58,19 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 		report("rg", true, fmt.Sprintf("%s (%s)", rg, a.rgVersion(ctx, rg)))
 	}
 
-	// Kotlin/Native distribution, klib tool and platform libraries
-	dist, err := a.distribution(req.Common, "")
+	store, storeErr := cache.Open(a.Getenv)
+
+	// Kotlin/Native distribution, klib tool, platform libraries, stdlib
+	r, err := a.newResolver(req.Common)
+	if err != nil {
+		return coded(err)
+	}
+	dist, err := r.distribution()
 	if err != nil {
 		report("kotlin-native", false, err.Error())
 		report("klib", false, "needs a Kotlin/Native distribution")
 		report("platform", false, "needs a Kotlin/Native distribution")
+		optional("stdlib", false, "needs a Kotlin/Native distribution")
 	} else {
 		detail := fmt.Sprintf("%s at %s", dist.Version, dist.Home)
 		if others := otherVersions(konan.Installed(konan.DataDir(a.Getenv, a.UserHome)), dist); others != "" {
@@ -71,11 +91,25 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 		} else {
 			report("platform", true, fmt.Sprintf("%d libraries for %s (%d targets in the distribution)", len(frameworks), target, len(dist.Targets())))
 		}
+
+		stdlib := &provider.Stdlib{Dist: dist, Cache: store}
+		if !stdlib.Available() {
+			optional("stdlib", false, "no sources zip at "+dist.StdlibSources()+"; kn.stdlib:native cannot be searched")
+		} else {
+			optional("stdlib", true, fmt.Sprintf("%s (extracted: %s)", dist.StdlibSources(), yesNo(storeErr == nil && stdlib.Cached())))
+		}
+	}
+
+	// Xcode, for sdk.apple
+	if sdk, err := xcode.Find(ctx, a.Runner, req.sdk()); err != nil {
+		optional("xcode", false, err.Error())
+	} else {
+		optional("xcode", true, fmt.Sprintf("SDK %s at %s (%d frameworks with headers)", sdk.Name, sdk.Path, len(sdk.Frameworks())))
 	}
 
 	// cache
-	if store, err := cache.Open(a.Getenv); err != nil {
-		report("cache", false, err.Error())
+	if storeErr != nil {
+		report("cache", false, storeErr.Error())
 	} else {
 		size, _ := store.Size()
 		dumps := len(store.List(provider.PlatformNamespace))

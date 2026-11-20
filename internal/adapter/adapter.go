@@ -1,6 +1,6 @@
 // Package adapter implements the tool's operations on top of the providers.
-// The CLI calls it directly, and the MCP server will call the same functions,
-// so both speak one output contract.
+// The CLI and the MCP server call the same functions, so both speak one
+// output contract.
 package adapter
 
 import (
@@ -9,11 +9,14 @@ import (
 	"io"
 	"os"
 
+	"golang.org/x/term"
+
 	"github.com/satanyakiv/ksrc-native/internal/cache"
 	"github.com/satanyakiv/ksrc-native/internal/errs"
 	"github.com/satanyakiv/ksrc-native/internal/executil"
 	"github.com/satanyakiv/ksrc-native/internal/konan"
 	"github.com/satanyakiv/ksrc-native/internal/provider"
+	"github.com/satanyakiv/ksrc-native/internal/xcode"
 )
 
 // Internal is the code of a failure that has no code of its own.
@@ -21,11 +24,13 @@ const Internal = "E_INTERNAL"
 
 // Adapter holds everything an operation needs from the outside world.
 type Adapter struct {
-	Runner   executil.Runner
-	Stdout   io.Writer           // results
-	Stderr   io.Writer           // diagnostics and progress
-	Getenv   func(string) string // environment lookup
-	UserHome string              // the user's home directory
+	Runner     executil.Runner
+	Stdout     io.Writer           // results
+	Stderr     io.Writer           // diagnostics and progress
+	Stdin      io.Reader           // answers to confirmation prompts
+	Getenv     func(string) string // environment lookup
+	UserHome   string              // the user's home directory
+	IsTerminal func() bool         // whether a person can answer a prompt
 }
 
 // New returns an Adapter wired to the real environment.
@@ -35,9 +40,21 @@ func New(stdout, stderr io.Writer) *Adapter {
 		Runner:   executil.OS{},
 		Stdout:   stdout,
 		Stderr:   stderr,
+		Stdin:    os.Stdin,
 		Getenv:   os.Getenv,
 		UserHome: home,
+		IsTerminal: func() bool {
+			return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+		},
 	}
+}
+
+// WithOutput returns a copy of the adapter that writes to other streams. The
+// MCP server uses it to capture the output of one tool call.
+func (a *Adapter) WithOutput(stdout, stderr io.Writer) *Adapter {
+	clone := *a
+	clone.Stdout, clone.Stderr = stdout, stderr
+	return &clone
 }
 
 // Common are the options every operation accepts.
@@ -46,6 +63,7 @@ type Common struct {
 	KotlinVersion string // --kotlin-version
 	Project       string // --project
 	Target        string // --target
+	SDK           string // --sdk
 }
 
 func (c Common) target() string {
@@ -55,47 +73,152 @@ func (c Common) target() string {
 	return c.Target
 }
 
-// distribution discovers the Kotlin/Native distribution. coordVersion is the
-// version named by a coordinate or file-id; it takes the place of
-// --kotlin-version and must agree with it.
-func (a *Adapter) distribution(c Common, coordVersion string) (konan.Distribution, error) {
-	version := c.KotlinVersion
-	if coordVersion != "" {
-		if version != "" && version != coordVersion {
-			return konan.Distribution{}, errs.New(errs.BadCoord,
-				fmt.Sprintf("--kotlin-version %s disagrees with the coordinate version %s", version, coordVersion),
-				"drop one of the two versions")
-		}
-		version = coordVersion
+func (c Common) sdk() string {
+	if c.SDK == "" {
+		return xcode.DefaultSDK
 	}
-	return konan.Discover(konan.DiscoverOptions{
-		KonanHome:     c.KonanHome,
-		KotlinVersion: version,
-		ProjectDir:    c.Project,
-		Getenv:        a.Getenv,
-		UserHome:      a.UserHome,
-		Warn:          a.Stderr,
-	})
+	return c.SDK
 }
 
-// platform builds the platform provider for a distribution.
-func (a *Adapter) platform(dist konan.Distribution) (*provider.Platform, error) {
-	store, err := cache.Open(a.Getenv)
+const groupsHint = "use kn.platform:<Framework>[:<kotlinVersion>], kn.stdlib:native[:<kotlinVersion>] or sdk.apple:<Framework>[:<sdk>]"
+
+// usesKonan reports whether a group is served from the Kotlin/Native
+// distribution, which makes the version of its coordinates a Kotlin version.
+func usesKonan(group string) bool {
+	return group == provider.PlatformGroup || group == provider.StdlibGroup
+}
+
+func knownGroup(c provider.Coordinate) error {
+	switch c.Group {
+	case provider.PlatformGroup, provider.StdlibGroup, provider.AppleGroup:
+		return nil
+	}
+	return errs.New(errs.BadCoord, fmt.Sprintf("unknown group %q in %s", c.Group, c), groupsHint)
+}
+
+// resolver turns coordinates into sources for one operation. It discovers the
+// Kotlin/Native distribution at most once, and only when a kn.* module needs
+// it, so sdk.apple works on a machine without Kotlin/Native.
+type resolver struct {
+	a             *Adapter
+	common        Common
+	kotlinVersion string // --kotlin-version or the version of a kn.* coordinate
+
+	dist     *konan.Distribution
+	distErr  error
+	store    *cache.Store
+	storeErr error
+}
+
+// newResolver validates the groups of the coordinates and settles the one
+// Kotlin version they and --kotlin-version may name.
+func (a *Adapter) newResolver(c Common, coords ...provider.Coordinate) (*resolver, error) {
+	version := ""
+	for _, coord := range coords {
+		if err := knownGroup(coord); err != nil {
+			return nil, err
+		}
+		if !usesKonan(coord.Group) || coord.Version == "" {
+			continue
+		}
+		if version != "" && version != coord.Version {
+			return nil, errs.New(errs.BadCoord,
+				fmt.Sprintf("the modules name two Kotlin versions, %s and %s", version, coord.Version),
+				"search one Kotlin version at a time")
+		}
+		version = coord.Version
+	}
+	if c.KotlinVersion != "" {
+		if version != "" && version != c.KotlinVersion {
+			return nil, errs.New(errs.BadCoord,
+				fmt.Sprintf("--kotlin-version %s disagrees with the coordinate version %s", c.KotlinVersion, version),
+				"drop one of the two versions")
+		}
+		version = c.KotlinVersion
+	}
+	return &resolver{a: a, common: c, kotlinVersion: version}, nil
+}
+
+func (r *resolver) distribution() (konan.Distribution, error) {
+	if r.dist == nil && r.distErr == nil {
+		d, err := konan.Discover(konan.DiscoverOptions{
+			KonanHome:     r.common.KonanHome,
+			KotlinVersion: r.kotlinVersion,
+			ProjectDir:    r.common.Project,
+			Getenv:        r.a.Getenv,
+			UserHome:      r.a.UserHome,
+			Warn:          r.a.Stderr,
+		})
+		if err != nil {
+			r.distErr = err
+		} else {
+			r.dist = &d
+		}
+	}
+	if r.distErr != nil {
+		return konan.Distribution{}, r.distErr
+	}
+	return *r.dist, nil
+}
+
+func (r *resolver) cache() (cache.Store, error) {
+	if r.store == nil && r.storeErr == nil {
+		s, err := cache.Open(r.a.Getenv)
+		if err != nil {
+			r.storeErr = err
+		} else {
+			r.store = &s
+		}
+	}
+	if r.storeErr != nil {
+		return cache.Store{}, r.storeErr
+	}
+	return *r.store, nil
+}
+
+func (r *resolver) platform() (*provider.Platform, error) {
+	dist, err := r.distribution()
 	if err != nil {
 		return nil, err
 	}
-	return &provider.Platform{Dist: dist, Runner: a.Runner, Cache: store, Log: a.Stderr}, nil
+	store, err := r.cache()
+	if err != nil {
+		return nil, err
+	}
+	return &provider.Platform{Dist: dist, Runner: r.a.Runner, Cache: store, Log: r.a.Stderr}, nil
 }
 
-// requirePlatformGroup rejects coordinates of groups this version cannot
-// serve.
-func requirePlatformGroup(c provider.Coordinate) error {
-	if c.Group == provider.PlatformGroup {
-		return nil
+func (r *resolver) stdlib() (*provider.Stdlib, error) {
+	dist, err := r.distribution()
+	if err != nil {
+		return nil, err
 	}
-	return errs.New(errs.BadCoord,
-		fmt.Sprintf("unknown group %q in %s", c.Group, c),
-		"this version serves platform libraries only: kn.platform:<Framework>[:<kotlinVersion>]")
+	store, err := r.cache()
+	if err != nil {
+		return nil, err
+	}
+	return &provider.Stdlib{Dist: dist, Cache: store, Log: r.a.Stderr}, nil
+}
+
+func (r *resolver) apple() *provider.AppleSDK {
+	return &provider.AppleSDK{Runner: r.a.Runner}
+}
+
+// provider returns the provider that owns the group of a coordinate.
+func (r *resolver) provider(c provider.Coordinate) (provider.Provider, error) {
+	switch c.Group {
+	case provider.PlatformGroup:
+		return r.platform()
+	case provider.StdlibGroup:
+		return r.stdlib()
+	case provider.AppleGroup:
+		return r.apple(), nil
+	}
+	return nil, knownGroup(c)
+}
+
+func (r *resolver) request(c provider.Coordinate) provider.Request {
+	return provider.Request{Coordinate: c, Target: r.common.target(), SDK: r.common.sdk()}
 }
 
 // coded makes sure an error leaves the adapter with a stable code.
