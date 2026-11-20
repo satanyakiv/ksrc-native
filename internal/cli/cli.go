@@ -13,6 +13,7 @@ import (
 	"github.com/satanyakiv/ksrc-native/internal/adapter"
 	"github.com/satanyakiv/ksrc-native/internal/errs"
 	"github.com/satanyakiv/ksrc-native/internal/konan"
+	"github.com/satanyakiv/ksrc-native/internal/mcpserver"
 	"github.com/satanyakiv/ksrc-native/internal/xcode"
 )
 
@@ -121,8 +122,45 @@ Typical flow:
 		newWhere(a, flags),
 		newDoctor(a, flags),
 		newClean(a),
+		newMCP(a, flags),
 	)
 	return root
+}
+
+func newMCP(a *adapter.Adapter, flags *common) *cobra.Command {
+	var tools string
+	cmd := &cobra.Command{
+		Use:   "mcp [--tools=search,cat,deps|all]",
+		Short: "Run a Model Context Protocol server on stdin and stdout",
+		Long: `Mcp serves the commands as MCP tools over stdio, for agents that talk MCP
+instead of running a shell. A tool takes the inputs of the command of the
+same name and returns what the command prints.
+
+Tools: search, cat and deps by default; where when named in --tools or with
+--tools=all. The global flags given here (--project, --target, --sdk,
+--kotlin-version, --konan-home) are the defaults of every tool call; a call
+may override them.`,
+		Example: `  ksrc-native mcp
+  ksrc-native mcp --tools=all --project /path/to/project
+  claude mcp add ksrc-native -- ksrc-native mcp`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			names, err := mcpserver.ParseTools(tools)
+			if err != nil {
+				return err
+			}
+			if a.Stdin == nil {
+				return usageError("mcp needs stdin to read requests from")
+			}
+			return mcpserver.Run(cmd.Context(), a, mcpserver.Options{
+				Version:  Version,
+				Tools:    names,
+				Defaults: flags.request(),
+			}, mcpserver.StdioTransport(a.Stdin, a.Stdout))
+		},
+	}
+	cmd.Flags().StringVar(&tools, "tools", "", "comma-separated tools to serve, or `all` (default: search,cat,deps)")
+	return cmd
 }
 
 func newSearch(a *adapter.Adapter, flags *common) *cobra.Command {
