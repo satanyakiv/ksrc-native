@@ -47,6 +47,16 @@ class name, make `cat` cheap, and let ripgrep limit a search with `-g`.
 the dump format; an unknown format fails with `E_DUMP_FORMAT` and writes
 nothing to the cache.
 
+**Added on 2026-11-20.** The splitter finds the end of a class or package
+block by one exact line. A `library fragment` line that opens or closes a
+fragment while such a block is open, and a dump that ends inside a fragment,
+are counted, and a count above zero fails with `E_DUMP_FORMAT`. Before, a
+dump with another indent of that line would have put every later class into
+the file of the first one, with no error. A class name longer than 200 bytes
+is cut to 200 for the file name and gets a dash and 8 hex digits of a hash
+of the name; the file content keeps the full name. A file name holds 255
+bytes on APFS and ext4, and one long name made the whole library fail.
+
 ## 2026-11-19: The Kotlin version comes from the distribution directory name
 
 **Decision.** The version of a distribution is read from its directory name

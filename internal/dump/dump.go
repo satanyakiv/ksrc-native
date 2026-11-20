@@ -39,6 +39,9 @@ package dump
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -150,6 +153,7 @@ type splitter struct {
 
 	state     state
 	fragments int
+	unclosed  int         // blocks that were still open where they had to be closed
 	pending   []string    // annotation lines that wait for their class header
 	current   *fileBuffer // the file that receives the open block
 
@@ -160,6 +164,20 @@ type splitter struct {
 }
 
 func (s *splitter) line(line string) {
+	// A class or package block ends with one exact line. A fragment marker
+	// while such a block is open means that line did not come: the dump is
+	// laid out differently from what this splitter knows. Without this check
+	// the rest of the library would silently land in one file. The state is
+	// reset, so every such place is counted, and finish reports them.
+	if (s.state == inClass || s.state == inPackage) && (line == fragmentOpen || line == fragmentClose) {
+		s.unclosed++
+		s.state = outside
+		if line == fragmentOpen {
+			s.fragments++
+			s.state = inFragment
+		}
+		return
+	}
 	switch s.state {
 	case outside:
 		s.lineOutside(line)
@@ -284,6 +302,20 @@ func (s *splitter) finish() (*Result, error) {
 			"the klib output has no `library fragment` blocks, so it is not a metadata dump this version understands",
 			"run `ksrc-native doctor`; if the Kotlin version is newer than this tool, report the version in an issue")
 	}
+	if s.state != outside {
+		// The dump ends inside a fragment: it was cut, or the fragment ends
+		// with another line than expected.
+		s.unclosed++
+	}
+	if s.unclosed > 0 {
+		times := "1 time"
+		if s.unclosed > 1 {
+			times = fmt.Sprintf("%d times", s.unclosed)
+		}
+		return nil, errs.New(errs.DumpFormat,
+			fmt.Sprintf("a class, package or fragment block of the klib output does not end where expected (%s), so it is not a metadata dump this version understands", times),
+			"run `ksrc-native doctor`; if the Kotlin version is newer than this tool, report the version in an issue")
+	}
 	s.flushPendingToTopLevel()
 
 	for _, name := range s.order {
@@ -311,7 +343,24 @@ func classFileName(header string) (string, bool) {
 	if outer == "" {
 		return "", false
 	}
-	return outer + FileSuffix, true
+	return shorten(outer) + FileSuffix, true
+}
+
+// maxStemBytes is the longest class name used as a file name as it is. A
+// file name holds 255 bytes on APFS and ext4; the rest is room for the hash
+// and the suffix.
+const maxStemBytes = 200
+
+// shorten cuts a sanitized class name that is too long for a file name and
+// appends 8 hex digits of its hash, so two long names with the same start
+// get two files. The hash ignores case, like the rule that names which
+// differ only by case share a file. The full name stays in the content.
+func shorten(stem string) string {
+	if len(stem) <= maxStemBytes {
+		return stem
+	}
+	sum := sha256.Sum256([]byte(strings.ToLower(stem)))
+	return stem[:maxStemBytes] + "-" + hex.EncodeToString(sum[:4])
 }
 
 // sanitize keeps the characters that are safe in a file name on every

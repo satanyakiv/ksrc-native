@@ -233,7 +233,7 @@ to stdout.
 | `E_BAD_LINES` | the `--lines` range cannot be parsed |
 | `E_BAD_ARGS` | wrong arguments, an unknown flag or command, an rg argument that is not allowed, an `--sdk` value that is not an SDK name |
 | `E_KLIB_FAILED` | the `klib` tool failed, usually because no JDK runs; the message has the exit status and the first 300 bytes of what `klib` printed, on one line; the `java` line of `doctor` shows the state of the JVM |
-| `E_DUMP_FORMAT` | the `klib` output is not a metadata dump the tool understands |
+| `E_DUMP_FORMAT` | the `klib` output is not a metadata dump the tool understands: it has no `library fragment` block, or a block does not end where expected; nothing is cached |
 | `E_RG_FAILED` | ripgrep failed, usually because of a bad pattern or argument |
 | `E_CACHE` | the cache directory cannot be used |
 | `E_TIMEOUT` | a program the tool started ran past its deadline and was stopped |
@@ -277,6 +277,10 @@ cache.
 <cache root>/stdlib-v1/<key>/meta.json
 <cache root>/stdlib-v1/<key>/src/...
 ```
+
+`<Class>` is the name of the outermost class. A name longer than 200 bytes is
+cut to 200 and gets a dash and 8 hex digits of a hash; the file content keeps
+the full name, so a search for it still hits.
 
 `meta.json` marks an entry as complete. An entry is built in a temporary
 sibling directory, `.tmp-<random>`, and renamed into place. A name that
