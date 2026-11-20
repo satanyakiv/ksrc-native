@@ -129,7 +129,7 @@ touches all of these in the same commit:
 
 | Change | Update |
 | --- | --- |
-| command, flag, output, error code | the `Long` and `Example` text in `internal/cli/cli.go`, `docs/cli-api.md`, `README.md`, `skills/ksrc-native/SKILL.md` |
+| command, flag, output, error code | the `Long` and `Example` text in `internal/cli/cli.go`, `docs/cli-api.md`, `docs/usage.md`, `README.md`, `skills/ksrc-native/SKILL.md` |
 | MCP tool or input | `internal/mcpserver/tools.go`, the MCP section of `docs/cli-api.md` and of the skill |
 | a design choice | a dated entry in `docs/decisions.md` |
 | version | `VERSION` and the manifests listed in `docs/release-workflow.md` |
