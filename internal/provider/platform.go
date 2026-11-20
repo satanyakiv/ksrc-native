@@ -85,6 +85,13 @@ func (p *Platform) Resolve(ctx context.Context, req Request) (Source, error) {
 	return Source{Coordinate: resolved, Root: entry.Src, Origin: klib.Path}, nil
 }
 
+// OtherDumpFormat reports whether a platform entry was written by another
+// version of the splitter. Such an entry has another key than the one a
+// search asks for, so nothing reads it.
+func OtherDumpFormat(e cache.Entry) bool {
+	return e.Meta.Format != dump.FormatVersion
+}
+
 // dropOtherFormats removes the entries of the same klib and target that
 // another version of the splitter wrote. The format is part of the key, so
 // nothing reads them again; left on disk they are a second line for the same
@@ -94,7 +101,7 @@ func (p *Platform) Resolve(ctx context.Context, req Request) (Source, error) {
 func (p *Platform) dropOtherFormats(coord Coordinate, klib konan.PlatformKlib, current cache.Entry) {
 	removed := 0
 	for _, e := range p.Cache.List(PlatformNamespace) {
-		if e.Dir == current.Dir || e.Meta.Format == dump.FormatVersion || e.Meta.Origin != klib.Path || e.Meta.Target != klib.Target {
+		if e.Dir == current.Dir || !OtherDumpFormat(e) || e.Meta.Origin != klib.Path || e.Meta.Target != klib.Target {
 			continue
 		}
 		if p.Cache.Drop(e) == nil {
@@ -167,7 +174,7 @@ func (p *Platform) Cached(target string) []Source {
 		// search never reads it. It stays on disk until its library is used
 		// again (dropOtherFormats) or until clean; reading it here would
 		// print every hit twice next to the rebuilt entry.
-		if e.Meta.Format != dump.FormatVersion {
+		if OtherDumpFormat(e) {
 			continue
 		}
 		// An entry of another distribution with the same version (for example a

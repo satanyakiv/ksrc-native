@@ -44,7 +44,13 @@ func (a *Adapter) clean(req CleanRequest) error {
 			if e.Meta.Target != "" {
 				line += " (" + e.Meta.Target + ")"
 			}
-			fmt.Fprintf(a.Stdout, "%s %s\n", line, humanSize(e.Size))
+			line += " " + humanSize(e.Size)
+			if usage.Namespace == provider.PlatformNamespace && provider.OtherDumpFormat(e.Entry) {
+				// The entry costs disk space and serves nothing; without the
+				// mark it looks like a second copy of a library.
+				line += ", another dump format: not read any more"
+			}
+			fmt.Fprintln(a.Stdout, line)
 		}
 	}
 	if total == 0 && entries == 0 {

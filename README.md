@@ -407,6 +407,11 @@ total: 8 entries, 14.3 MB in ~/Library/Caches/ksrc-native
 dry run: nothing deleted
 ```
 
+After an upgrade of the tool a line can end with
+`, another dump format: not read any more`. That entry was written by an
+older version. It is removed when its library is searched again, or by
+`clean -y`.
+
 ### Errors
 
 An error goes to stderr as `E_CODE: message. Try: hint`, and the exit code is 1.

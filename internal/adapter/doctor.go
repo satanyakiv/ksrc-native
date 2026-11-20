@@ -139,8 +139,18 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 		report("cache", false, err.Error())
 	} else {
 		size, _ := store.Size()
-		dumps := len(store.List(provider.PlatformNamespace))
-		report("cache", true, fmt.Sprintf("%s (%s, %s)", store.Root, counted(dumps, "platform dump", "platform dumps"), humanSize(size)))
+		dumps := store.List(provider.PlatformNamespace)
+		count := counted(len(dumps), "platform dump", "platform dumps")
+		other := 0
+		for _, e := range dumps {
+			if provider.OtherDumpFormat(e) {
+				other++
+			}
+		}
+		if other > 0 {
+			count += fmt.Sprintf(", %d of another dump format", other)
+		}
+		report("cache", true, fmt.Sprintf("%s (%s, %s)", store.Root, count, humanSize(size)))
 	}
 
 	if failed > 0 {

@@ -358,8 +358,10 @@ that changes the split files, a library is dumped again on its next use. The
 entry of the other format is never read again. It is removed when the same
 library is used: a note on stderr says `ksrc-native: removed 1 cache entry of
 another dump format for <coordinate> (<target>)`. A library that is not used
-again keeps its old entry until `ksrc-native clean`; `doctor` and `clean`
-count such an entry.
+again keeps its old entry until `ksrc-native clean`. `clean` ends the line of
+such an entry with `, another dump format: not read any more`, and the
+`cache` line of `doctor` reads `(8 platform dumps, 3 of another dump format,
+20.3 MB)`.
 
 ## MCP tools
 

@@ -352,5 +352,7 @@ These are known and left as they are for the first release.
 - **Windows is not supported.** No binary is built for it, and the process
   group that stops `klib` with its children exists on Unix only.
 - **An entry of an older dump format stays on disk until its library is used
-  again or until `clean`.** `doctor` and `clean` count such an entry.
+  again or until `clean`.** `clean` marks such an entry in its list and
+  `doctor` counts them in its `cache` line, so the wasted space can be seen.
+  Nothing removes them without one of those two events.
 - **The binaries are not signed or notarized.**

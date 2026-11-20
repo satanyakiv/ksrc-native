@@ -103,7 +103,9 @@ a protocol with `'@protocol UITableViewDelegate'`. Swift-only frameworks
   tool, the JVM, the stdlib sources, Xcode, the cache). It runs `java -version`
   and checks that the cache can be written; a `MISSING` line says what to do.
 - `ksrc-native clean`: lists the cache with sizes. It deletes only with `-y`,
-  or after a yes typed in a terminal; `--dry-run` never deletes.
+  or after a yes typed in a terminal; `--dry-run` never deletes. A line that
+  ends with `another dump format: not read any more` is an entry of an older
+  version of the tool; it only costs disk space.
 
 ## MCP
 
