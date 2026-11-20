@@ -41,9 +41,25 @@ const ServerName = "ksrc-native"
 // E_MCP is the code of a failure of the server itself, not of a tool.
 const codeMCP = "E_MCP"
 
-// MaxResultBytes caps the text of one tool result. A search with thousands
-// of hits would otherwise fill the context of the model that called it.
-const MaxResultBytes = 256 * 1024
+// DefaultMaxResultBytes caps the text of one tool result: every text block
+// together, the truncation note included. A search with thousands of hits
+// would otherwise fill the context of the model that called it; 64 KiB is
+// about 16 000 tokens.
+const DefaultMaxResultBytes = 64 * 1024
+
+// MinMaxResultBytes is the smallest cap --max-result-bytes accepts. Below
+// it a result has no room for a handful of lines next to the notes.
+const MinMaxResultBytes = 4096
+
+// CheckMaxResultBytes validates a value of --max-result-bytes.
+func CheckMaxResultBytes(n int) error {
+	if n < MinMaxResultBytes {
+		return errs.New(errs.BadArgs,
+			fmt.Sprintf("--max-result-bytes %d is below the minimum of %d", n, MinMaxResultBytes),
+			fmt.Sprintf("pass a number of bytes from %d up; the default is %d", MinMaxResultBytes, DefaultMaxResultBytes))
+	}
+	return nil
+}
 
 const instructions = `ksrc-native searches and reads what a Gradle dependency search does not reach in Kotlin Multiplatform iOS code.
 
@@ -110,6 +126,9 @@ type Options struct {
 	// Defaults fill the common inputs a tool call leaves out. They come from
 	// the flags `ksrc-native mcp` was started with.
 	Defaults adapter.Common
+	// MaxResultBytes caps the text of one tool result; 0 means
+	// DefaultMaxResultBytes.
+	MaxResultBytes int
 }
 
 // New returns a server whose tools run on a.
@@ -126,7 +145,14 @@ func New(a *adapter.Adapter, opts Options) (*mcp.Server, error) {
 		&mcp.Implementation{Name: ServerName, Title: "ksrc-native", Version: version},
 		&mcp.ServerOptions{Instructions: instructions},
 	)
-	h := &handlers{a: a, defaults: opts.Defaults}
+	limit := opts.MaxResultBytes
+	if limit == 0 {
+		limit = DefaultMaxResultBytes
+	}
+	if err := CheckMaxResultBytes(limit); err != nil {
+		return nil, err
+	}
+	h := &handlers{a: a, defaults: opts.Defaults, limit: limit}
 	for _, name := range tools {
 		switch name {
 		case ToolSearch:

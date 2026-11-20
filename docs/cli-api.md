@@ -183,9 +183,14 @@ Lists the cache entries with their sizes, then deletes them.
 Only the tool's own cache directories are removed. Other files in the cache
 root stay.
 
-### `mcp [--tools=<list>|all]`
+### `mcp [--tools=<list>|all] [--max-result-bytes=<n>]`
 
 Runs an MCP server on stdin and stdout. See [MCP tools](#mcp-tools).
+
+| Flag | Meaning |
+| --- | --- |
+| `--tools` | tools to serve: a comma-separated list of `search`, `cat`, `deps`, `where`, or `all`; default `search,cat,deps` |
+| `--max-result-bytes` | largest text of one tool result in bytes; default 65536, minimum 4096; a smaller value or one that is not a number fails with `E_BAD_ARGS` |
 
 ## Exit codes and errors
 
@@ -308,6 +313,12 @@ Results:
   block. When stdout is empty, the note is the result.
 - Failure: `isError` is true and the text is the `E_CODE: message. Try: hint`
   line. A failed tool call is not a protocol error.
-- A result longer than 256 KiB is cut at the end of a line, and a note says so.
+- The text of one result, all blocks together, is at most 64 KiB (65536
+  bytes), or the value of `--max-result-bytes`. Notes get an eighth of that.
+  Longer output is cut at the end of a line, and the last line of the text
+  block says so: `ksrc-native: output truncated at <kept> bytes, the limit of
+  one result is <limit>; ...`. The note is counted in the limit. A search
+  stops ripgrep at that point, so a broad pattern costs no more time than a
+  narrow one.
 
 There is no `clean` and no `doctor` tool.

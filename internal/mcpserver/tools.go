@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -112,6 +113,7 @@ var (
 type handlers struct {
 	a        *adapter.Adapter
 	defaults adapter.Common
+	limit    int
 }
 
 func (h *handlers) search(ctx context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, any, error) {
@@ -150,6 +152,15 @@ func (h *handlers) where(ctx context.Context, _ *mcp.CallToolRequest, in WhereIn
 	}), nil, nil
 }
 
+// errResultFull is what the result buffer answers once it is full. An
+// operation that gets it stops writing; a search stops rg.
+var errResultFull = errors.New("the tool result is full")
+
+// truncationNote is the last line of a result that was cut.
+func truncationNote(kept, limit int) string {
+	return fmt.Sprintf("ksrc-native: output truncated at %d bytes, the limit of one result is %d; narrow the pattern, name fewer modules, or pass a line range\n", kept, limit)
+}
+
 // call runs one operation on a copy of the adapter that writes into buffers,
 // and turns what it printed into a tool result:
 //
@@ -159,26 +170,37 @@ func (h *handlers) where(ctx context.Context, _ *mcp.CallToolRequest, in WhereIn
 //   - failure: IsError with the notes and the "E_CODE: message. Try: hint"
 //     line. Partial output is dropped.
 //
+// All text blocks together stay within the limit of the server: the notes
+// get an eighth of it, the truncation note is counted, and the text gets the
+// rest. Output that does not fit ends the operation early and is a success
+// with the note, not a failure.
+//
 // It never returns a Go error: a failed operation is a tool error the model
 // can read, not a protocol error.
 func (h *handlers) call(run func(a *adapter.Adapter) error) *mcp.CallToolResult {
-	stdout := &cappedBuffer{limit: MaxResultBytes}
-	stderr := &cappedBuffer{limit: MaxResultBytes}
+	notesLimit := h.limit / 8
+	stdout := &cappedBuffer{limit: h.limit - notesLimit - len(truncationNote(h.limit, h.limit)), stop: true}
+	stderr := &cappedBuffer{limit: notesLimit}
 	err := run(h.a.WithOutput(stdout, stderr))
+	if stdout.truncated && errors.Is(err, errResultFull) {
+		err = nil
+	}
 
 	notes := strings.TrimRight(stderr.String(), "\n")
 	if err != nil {
 		text := err.Error()
-		if notes != "" {
+		if notes != "" && len(notes)+1+len(text) <= h.limit {
 			text = notes + "\n" + text
+		}
+		if len(text) > h.limit {
+			text = text[:h.limit]
 		}
 		return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: text}}}
 	}
 
 	text := stdout.String()
 	if stdout.truncated {
-		text += fmt.Sprintf("ksrc-native: output truncated at %d of %d bytes; narrow the pattern, name fewer modules, or pass a line range\n",
-			len(text), stdout.total)
+		text += truncationNote(len(text), h.limit)
 	}
 	switch {
 	case text == "" && notes == "":
@@ -192,32 +214,42 @@ func (h *handlers) call(run func(a *adapter.Adapter) error) *mcp.CallToolResult 
 }
 
 // cappedBuffer keeps the first limit bytes written to it, cut after the last
-// complete line, and counts the rest.
+// complete line.
 type cappedBuffer struct {
-	limit     int
+	limit int
+	// stop makes Write fail with errResultFull once the buffer is full, so
+	// the operation ends instead of producing output nobody reads. Without
+	// it the rest is dropped silently, which suits notes.
+	stop      bool
 	buf       bytes.Buffer
-	total     int
 	truncated bool
 }
 
-// Write implements io.Writer. It never fails, so an operation whose output
-// is too long still runs to its end.
+// Write implements io.Writer.
 func (c *cappedBuffer) Write(p []byte) (int, error) {
-	c.total += len(p)
 	if c.truncated {
-		return len(p), nil
+		return c.full(0, len(p))
 	}
-	if room := c.limit - c.buf.Len(); len(p) > room {
-		c.buf.Write(p[:room])
-		c.truncated = true
-		// Drop the line that was cut in the middle.
-		if i := bytes.LastIndexByte(c.buf.Bytes(), '\n'); i >= 0 {
-			c.buf.Truncate(i + 1)
-		}
-		return len(p), nil
+	room := c.limit - c.buf.Len()
+	if len(p) <= room {
+		return c.buf.Write(p)
 	}
-	c.buf.Write(p)
-	return len(p), nil
+	c.buf.Write(p[:room])
+	c.truncated = true
+	// Drop the line that was cut in the middle.
+	if i := bytes.LastIndexByte(c.buf.Bytes(), '\n'); i >= 0 {
+		c.buf.Truncate(i + 1)
+	}
+	return c.full(room, len(p))
+}
+
+// full is the answer to a write that did not fit: kept of the size bytes
+// were taken.
+func (c *cappedBuffer) full(kept, size int) (int, error) {
+	if c.stop {
+		return kept, errResultFull
+	}
+	return size, nil
 }
 
 func (c *cappedBuffer) String() string { return c.buf.String() }

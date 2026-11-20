@@ -153,9 +153,12 @@ Typical flow:
 }
 
 func newMCP(a *adapter.Adapter, flags *common) *cobra.Command {
-	var tools string
+	var (
+		tools          string
+		maxResultBytes int
+	)
 	cmd := &cobra.Command{
-		Use:   "mcp [--tools=search,cat,deps|all]",
+		Use:   "mcp [--tools=search,cat,deps|all] [--max-result-bytes=<n>]",
 		Short: "Run a Model Context Protocol server on stdin and stdout",
 		Long: `Mcp serves the commands as MCP tools over stdio, for agents that talk MCP
 instead of running a shell. A tool takes the inputs of the command of the
@@ -165,10 +168,15 @@ Tools: search, cat and deps by default; where when named in --tools or with
 --tools=all. The global flags given here (--project, --target, --sdk,
 --kotlin-version) are the defaults of every tool call; a call may override
 them. --konan-home is not an input of a call: it is set here or in the
-KONAN_HOME variable, because the server runs the klib program found in it.`,
+KONAN_HOME variable, because the server runs the klib program found in it.
+
+The text of one tool result is at most 65536 bytes, or the number given with
+--max-result-bytes (4096 or more). Longer output is cut at the end of a line,
+the last line says so, and a search stops at that point.`,
 		Example: `  ksrc-native mcp
   ksrc-native mcp --tools=all --project /path/to/project
   ksrc-native --konan-home ~/.konan/kotlin-native-prebuilt-macos-aarch64-2.4.21 mcp
+  ksrc-native mcp --max-result-bytes 16384
   claude mcp add ksrc-native -- ksrc-native mcp`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -176,17 +184,22 @@ KONAN_HOME variable, because the server runs the klib program found in it.`,
 			if err != nil {
 				return err
 			}
+			if err := mcpserver.CheckMaxResultBytes(maxResultBytes); err != nil {
+				return err
+			}
 			if a.Stdin == nil {
 				return usageError("mcp needs stdin to read requests from")
 			}
 			return mcpserver.Run(cmd.Context(), a, mcpserver.Options{
-				Version:  effectiveVersion(),
-				Tools:    names,
-				Defaults: flags.request(),
+				Version:        effectiveVersion(),
+				Tools:          names,
+				Defaults:       flags.request(),
+				MaxResultBytes: maxResultBytes,
 			}, mcpserver.StdioTransport(a.Stdin, a.Stdout))
 		},
 	}
 	cmd.Flags().StringVar(&tools, "tools", "", "tools to serve: a comma-separated `list`, or all (default: search,cat,deps)")
+	cmd.Flags().IntVar(&maxResultBytes, "max-result-bytes", mcpserver.DefaultMaxResultBytes, "largest text of one tool result, in `bytes` (4096 or more)")
 	return cmd
 }
 

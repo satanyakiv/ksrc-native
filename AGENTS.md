@@ -61,7 +61,7 @@ Run `gofmt`, `go vet` and `go test` before every commit.
 | `cmd/ksrc-native` | `main` only: `os.Exit(cli.Main())` |
 | `internal/cli` | cobra commands and flags; turns an error into a line on stderr and exit code 1 |
 | `internal/adapter` | the operations: `Search`, `Cat`, `Deps`, `Where`, `Doctor`, `Clean`. The command line and the MCP server both call it |
-| `internal/mcpserver` | MCP tools over the adapter; input structs, result text, the 256 KiB cap |
+| `internal/mcpserver` | MCP tools over the adapter; input structs, result text, the cap of one result (64 KiB, `--max-result-bytes`) |
 | `internal/provider` | coordinates and the three providers (`Platform`, `Stdlib`, `AppleSDK`) |
 | `internal/konan` | finds Kotlin/Native distributions, their platform klibs and the `klib` tool |
 | `internal/xcode` | finds Xcode SDKs and framework headers through `xcrun` and `xcode-select` |

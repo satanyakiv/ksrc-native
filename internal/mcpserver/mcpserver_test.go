@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -426,29 +427,38 @@ func TestFailuresAreToolErrors(t *testing.T) {
 }
 
 func TestLongOutputIsTruncatedAtALine(t *testing.T) {
-	h := &handlers{a: &adapter.Adapter{}}
+	const limit = 8 * 1024
+	h := &handlers{a: &adapter.Adapter{}, limit: limit}
 	line := strings.Repeat("x", 99) + "\n"
+	const want = 2 * limit / 100 // lines the operation wants to write
+	written := 0
 	res := h.call(func(a *adapter.Adapter) error {
-		for i := 0; i < 2*MaxResultBytes/len(line); i++ {
+		for i := 0; i < want; i++ {
 			if _, err := a.Stdout.Write([]byte(line)); err != nil {
 				return err
 			}
+			written++
 		}
 		return nil
 	})
 	text := res.Content[0].(*mcp.TextContent).Text
 	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
 	last := lines[len(lines)-1]
-	if res.IsError || !strings.HasPrefix(last, "ksrc-native: output truncated at ") || !strings.Contains(last, fmt.Sprintf("of %d bytes", 2*MaxResultBytes/len(line)*len(line))) {
-		t.Errorf("last line = %q, want a truncation note with the full size", last)
+	if res.IsError || !strings.HasPrefix(last, "ksrc-native: output truncated at ") || !strings.Contains(last, fmt.Sprintf("the limit of one result is %d", limit)) {
+		t.Errorf("IsError = %v, last line = %q; want a result that ends with a truncation note naming the limit", res.IsError, last)
 	}
 	for i, l := range lines[:len(lines)-1] {
 		if len(l) != 99 {
 			t.Fatalf("line %d has %d bytes: a line was cut in the middle", i+1, len(l))
 		}
 	}
-	if len(text) > MaxResultBytes+200 {
-		t.Errorf("text has %d bytes, want about %d", len(text), MaxResultBytes)
+	// The note is part of the limit.
+	if len(text) > limit || len(text) < limit/2 {
+		t.Errorf("text has %d bytes, want at most the limit of %d and most of it used", len(text), limit)
+	}
+	// The writer fails once the result is full, so the operation stops.
+	if written >= want {
+		t.Errorf("the operation wrote all %d lines, want it stopped by a write error near line %d", want, limit/100)
 	}
 
 	// Short output is untouched; no output at all still yields a text.
@@ -647,5 +657,120 @@ func TestTargetAndSDKInputsAreChecked(t *testing.T) {
 	}
 	if calls := f.dist.KlibCalls(t); len(calls) != 0 {
 		t.Errorf("the refused calls built %d dumps, want 0", len(calls))
+	}
+}
+
+// Notes share the limit with the text: both blocks together fit into it.
+func TestNotesAndTextShareTheLimit(t *testing.T) {
+	const limit = 8 * 1024
+	h := &handlers{a: &adapter.Adapter{}, limit: limit}
+	res := h.call(func(a *adapter.Adapter) error {
+		for i := 0; i < 1000; i++ {
+			fmt.Fprintf(a.Stderr, "ksrc-native: dumping kn.platform:Framework%04d:2.4.21 for ios_arm64 (first use, a few seconds)...\n", i)
+		}
+		for i := 0; i < 1000; i++ {
+			if _, err := fmt.Fprintf(a.Stdout, "file-%04d 1:1:%s\n", i, strings.Repeat("y", 60)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	blocks := texts(t, res)
+	total := 0
+	for _, b := range blocks {
+		total += len(b)
+	}
+	if res.IsError || len(blocks) != 2 || total > limit {
+		t.Errorf("IsError = %v, %d blocks with %d bytes in all; want two blocks within the limit of %d", res.IsError, len(blocks), total, limit)
+	}
+	if !strings.Contains(blocks[0], "output truncated") {
+		t.Errorf("the text block ends with %q, want the truncation note", blocks[0][max(0, len(blocks[0])-80):])
+	}
+}
+
+func TestResultLimitOption(t *testing.T) {
+	if DefaultMaxResultBytes != 64*1024 {
+		t.Errorf("DefaultMaxResultBytes = %d, want 64 KiB", DefaultMaxResultBytes)
+	}
+	tests := []struct {
+		name  string
+		limit int
+		code  string
+	}{
+		{"zero means the default", 0, ""},
+		{"the floor", MinMaxResultBytes, ""},
+		{"a large value", 1 << 20, ""},
+		{"below the floor", MinMaxResultBytes - 1, errs.BadArgs},
+		{"negative", -1, errs.BadArgs},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := New(&adapter.Adapter{}, Options{MaxResultBytes: tt.limit})
+			if errs.Code(err) != tt.code {
+				t.Errorf("New() with MaxResultBytes %d: error = %v, want code %q", tt.limit, err, tt.code)
+			}
+			if err != nil && !strings.Contains(err.Error(), "--max-result-bytes") {
+				t.Errorf("error = %v, want one that names --max-result-bytes", err)
+			}
+		})
+	}
+}
+
+// rgWatch records how the runs of rg ended.
+type rgWatch struct {
+	executil.Runner
+	mu      sync.Mutex
+	runs    int
+	stopped int // runs that ended because their context was cancelled
+}
+
+func (w *rgWatch) Run(ctx context.Context, cmd executil.Command) error {
+	err := w.Runner.Run(ctx, cmd)
+	if filepath.Base(cmd.Path) == "rg" {
+		w.mu.Lock()
+		w.runs++
+		if err != nil && ctx.Err() != nil {
+			w.stopped++
+		}
+		w.mu.Unlock()
+	}
+	return err
+}
+
+// A search that fills the result does not let rg read the rest of the files.
+func TestSearchStopsRipgrepWhenTheResultIsFull(t *testing.T) {
+	f := newFixture(t)
+	// 100 000 matching lines: far more than one result holds, and far more
+	// than rg can push into the pipes before the search stops reading.
+	f.dist.AddStdlibSources(t, map[string]string{
+		"nativeMain/big/Big.kt": strings.Repeat("public val someLongName: kotlin.Int = 1\n", 100_000),
+	})
+	watch := &rgWatch{Runner: f.a.Runner}
+	f.a.Runner = watch
+	session := f.connect(t, Options{})
+
+	res := call(t, session, ToolSearch, map[string]any{"pattern": "someLongName", "modules": []string{"kn.stdlib:native"}})
+	blocks := texts(t, res)
+	if res.IsError || len(blocks) == 0 {
+		t.Fatalf("search: IsError = %v, blocks = %d; want a truncated result", res.IsError, len(blocks))
+	}
+	text := blocks[0]
+	total := 0
+	for _, b := range blocks {
+		total += len(b)
+	}
+	if total > DefaultMaxResultBytes || len(text) < DefaultMaxResultBytes/2 {
+		t.Errorf("the result has %d bytes, want at most %d and most of it used", total, DefaultMaxResultBytes)
+	}
+	if !strings.HasPrefix(text, "kn.stdlib:native:2.4.21!/nativeMain/big/Big.kt 1:12:public val someLongName") {
+		t.Errorf("the result starts with %q, want the first hit", text[:min(len(text), 90)])
+	}
+	if tail := text[strings.LastIndex(strings.TrimRight(text, "\n"), "\n")+1:]; !strings.HasPrefix(tail, "ksrc-native: output truncated at ") {
+		t.Errorf("the result ends with %q, want the truncation note", tail)
+	}
+	watch.mu.Lock()
+	defer watch.mu.Unlock()
+	if watch.runs != 1 || watch.stopped != 1 {
+		t.Errorf("rg ran %d times and was stopped %d times; want one run, stopped when the result was full", watch.runs, watch.stopped)
 	}
 }

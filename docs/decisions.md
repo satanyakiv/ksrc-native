@@ -121,7 +121,8 @@ in the same line lets an agent correct the call without another lookup.
 
 **Decision.** An MCP tool returns the text its command prints. There is no
 output schema and no structured content. A failure is a result with `isError`
-and the `E_CODE` line, not a protocol error. A result is cut at 256 KiB.
+and the `E_CODE` line, not a protocol error. A result is cut at 64 KiB
+(changed on 2026-11-20 from 256 KiB, see below).
 The inputs are the command's flags in snake_case.
 
 **Why.** The command line and the MCP server share one adapter layer, so both
@@ -226,3 +227,23 @@ is built in a temporary directory that is removed. A program that needs more
 than its deadline on a very slow machine fails; the numbers are constants in
 `internal/adapter/limits.go`. Process groups are a Unix feature. On another
 system only the program itself is killed, and the 2 s wait bounds the rest.
+
+## 2026-11-20: An MCP result is at most 64 KiB, and a full result stops the search
+
+**Decision.** The text of one tool result, all blocks together and the
+truncation note included, is at most 64 KiB. `ksrc-native mcp
+--max-result-bytes <n>` changes the limit; the minimum is 4096. Notes get an
+eighth of the limit, the text the rest. The buffer that collects the text
+fails the write that does not fit. The operation ends there, and the result
+is a success that ends with the note.
+
+**Why.** The limit was 256 KiB, and the note was added on top of it. A search
+for `.` in UIKit returned 262 224 bytes, about 65 000 tokens in one answer,
+and ripgrep still read every file, because the buffer took and dropped the
+rest. 64 KiB is about 16 000 tokens: enough for several hundred hits, and
+small enough that one careless pattern does not use up the context of the
+model. The person who starts the server knows the model and can raise it.
+
+**Cost.** A result that was cut no longer says how long the full output would
+have been: the search stops before it knows. The note gives the kept size and
+the limit instead.

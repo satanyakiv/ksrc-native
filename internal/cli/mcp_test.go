@@ -199,3 +199,35 @@ func TestMCPCommandErrors(t *testing.T) {
 		t.Errorf("mcp --help: code = %d\n%s", code, stdout)
 	}
 }
+
+func TestMCPCommandMaxResultBytes(t *testing.T) {
+	h := newHarness(t)
+
+	for _, value := range []string{"0", "-1", "100", "abc", "64k"} {
+		code, stdout, stderr := h.run("mcp", "--max-result-bytes", value)
+		if code != 1 || stdout != "" || !strings.HasPrefix(stderr, "E_BAD_ARGS: ") || !strings.Contains(stderr, "max-result-bytes") {
+			t.Errorf("mcp --max-result-bytes %s: code = %d, stdout = %q, stderr = %q; want E_BAD_ARGS that names the flag", value, code, stdout, stderr)
+		}
+	}
+
+	// The whole UserNotifications excerpt is longer than 4096 bytes.
+	session, stop := h.startMCP("mcp", "--max-result-bytes", "4096")
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "search",
+		Arguments: map[string]any{"pattern": ".", "modules": []string{unModule}},
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("tools/call search: %v, result %+v", err, res)
+	}
+	total := 0
+	for _, c := range res.Content {
+		total += len(c.(*mcp.TextContent).Text)
+	}
+	text := res.Content[0].(*mcp.TextContent).Text
+	if total > 4096 || !strings.Contains(text, "ksrc-native: output truncated at ") || !strings.Contains(text, "the limit of one result is 4096") {
+		t.Errorf("the result has %d bytes and ends with %q; want at most 4096 bytes and a truncation note", total, text[max(0, len(text)-120):])
+	}
+	if code := stop(); code != 0 {
+		t.Errorf("the mcp command exited with %d, want 0", code)
+	}
+}

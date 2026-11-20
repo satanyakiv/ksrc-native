@@ -108,6 +108,11 @@ line. There is no `konan_home` input: the distribution is chosen when the
 server starts (`ksrc-native --konan-home <path> mcp`). Pick a Kotlin version
 with `kotlin_version` or `project`.
 
+One result holds at most 64 KiB of text (the server's `--max-result-bytes`
+changes that). A longer result ends with a line that starts with
+`ksrc-native: output truncated`. The hits after it are missing: narrow the
+pattern, name one module, or read a file with `cat` and `lines`.
+
 ## Flags
 
 - `--module <coordinate>` (repeatable, short `-m`). For `kn.platform` the name

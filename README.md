@@ -188,6 +188,10 @@ adds `where`. A tool takes the flags of its command as inputs in snake_case
 and returns what the command prints. [docs/cli-api.md](docs/cli-api.md) lists
 every input.
 
+One result is at most 64 KiB of text. Longer output is cut at the end of a
+line, the last line says so, and the search stops there.
+`ksrc-native mcp --max-result-bytes <n>` sets another limit.
+
 The inputs are checked as untrusted values. A tool call cannot choose the
 Kotlin/Native distribution: `--konan-home` is a flag of the server
 (`ksrc-native --konan-home <path> mcp`), not an input. `rg_args` takes the
