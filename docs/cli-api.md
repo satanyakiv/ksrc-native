@@ -237,11 +237,15 @@ sibling directory and renamed into place.
 The global flags given to `ksrc-native mcp` are the defaults of every call.
 An input of a call wins over them.
 
+`--konan-home` is the exception: no tool has a `konan_home` input. The server
+runs the `klib` program of the distribution, so only the person who starts the
+server chooses it, with `ksrc-native --konan-home <path> mcp` or the
+`KONAN_HOME` variable. A call that sends `konan_home` is rejected.
+
 Inputs every tool accepts, all optional:
 
 | Input | Type | Flag |
 | --- | --- | --- |
-| `konan_home` | string | `--konan-home` |
 | `kotlin_version` | string | `--kotlin-version` |
 | `project` | string | `--project` |
 | `target` | string | `--target` |

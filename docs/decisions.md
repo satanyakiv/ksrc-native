@@ -170,12 +170,19 @@ read a file outside the three sources.
   `--flag=value`, so a value is never read as a flag. The pattern travels as
   one `--regexp=<pattern>` argument. rg runs with `--no-config`. A hit outside
   the searched directories is an error, not a line of output.
+- No MCP tool has a `konan_home` input. The distribution is set by
+  `--konan-home` of `ksrc-native mcp` or by `KONAN_HOME`. A call that sends
+  the field is rejected by the input schema.
 
 **Why.** A model fills these fields, and a model reads files it did not
 write. Before this change `-- --pre <script>` ran the script, and a path after
-`--` printed lines of any file the user can read. A README in a hostile
-repository could ask for either.
+`--` printed lines of any file the user can read. A call with `konan_home`
+ran `<that directory>/bin/klib`. A README in a hostile repository could ask
+for any of them.
 
 **Cost.** An rg flag outside the list fails with `E_BAD_ARGS`, also for a
 person at a terminal: no `-l`, no `-c`, no `--hidden`, no `-t`. `-m1` must be
-written `-m 1`. A new flag needs a line in the list and a test.
+written `-m 1`. A new flag needs a line in the list and a test. An agent that
+talks MCP cannot switch to a distribution outside `~/.konan` in the middle of
+a session; it picks among the installed ones with `kotlin_version` or
+`project`, or the server is restarted with `--konan-home`.

@@ -11,10 +11,15 @@ import (
 	"github.com/satanyakiv/ksrc-native/internal/adapter"
 )
 
-// CommonInput mirrors the global flags of the command line. Every field is
-// optional; an empty one takes the value the server was started with.
+// CommonInput mirrors the global flags of the command line that a call may
+// set. Every field is optional; an empty one takes the value the server was
+// started with.
+//
+// There is no konan_home on purpose. The distribution holds the klib program
+// the server runs, so a call that could name a directory could run a program
+// of its choice. Only --konan-home of `ksrc-native mcp` and the KONAN_HOME
+// variable choose it, and both belong to the person who starts the server.
 type CommonInput struct {
-	KonanHome     string `json:"konan_home,omitempty" jsonschema:"path of the Kotlin/Native distribution; default: discovered"`
 	KotlinVersion string `json:"kotlin_version,omitempty" jsonschema:"Kotlin version of the distribution to use, for example 2.4.21; default: read from gradle/libs.versions.toml of the project, else the newest installed"`
 	Project       string `json:"project,omitempty" jsonschema:"project directory whose gradle/libs.versions.toml names the Kotlin version; default: the directory the server runs in"`
 	Target        string `json:"target,omitempty" jsonschema:"Kotlin/Native target of kn.platform modules; default: ios_arm64"`
@@ -30,7 +35,7 @@ func (in CommonInput) common(defaults adapter.Common) adapter.Common {
 		return fallback
 	}
 	return adapter.Common{
-		KonanHome:     pick(in.KonanHome, defaults.KonanHome),
+		KonanHome:     defaults.KonanHome,
 		KotlinVersion: pick(in.KotlinVersion, defaults.KotlinVersion),
 		Project:       pick(in.Project, defaults.Project),
 		Target:        pick(in.Target, defaults.Target),

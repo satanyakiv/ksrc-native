@@ -3,11 +3,14 @@ package cli
 import (
 	"context"
 	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/satanyakiv/ksrc-native/internal/testutil"
 )
 
 // startMCP runs `ksrc-native <args...>` (an mcp command line) on a copy of
@@ -140,6 +143,29 @@ func TestMCPCommandToolsFlagAndGlobalFlags(t *testing.T) {
 	if code := stop(); code != 0 {
 		t.Errorf("exit code = %d", code)
 	}
+
+	// --konan-home is a start flag only. A call cannot name a distribution,
+	// because the server runs the klib program found in it.
+	other := testutil.NewDistribution(t, filepath.Join(t.TempDir(), "elsewhere"), "2.4.10")
+	other.AddPlatformKlib(t, "ios_arm64", "UserNotifications", testutil.ReadFixture(t, testutil.UserNotificationsDump))
+	session, stop = h.startMCP("--konan-home", other.Home, "mcp", "--tools", "where")
+	res, err = session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "where",
+		Arguments: map[string]any{"coordinate": unModule},
+	})
+	if err != nil || res.IsError || !strings.HasPrefix(res.Content[0].(*mcp.TextContent).Text, other.Home+string(filepath.Separator)) {
+		t.Errorf("where with --konan-home as the server default: %v, result %+v", err, res)
+	}
+	res, err = session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "where",
+		Arguments: map[string]any{"coordinate": unModule, "konan_home": h.dist.Home},
+	})
+	if err != nil || !res.IsError || !strings.Contains(res.Content[0].(*mcp.TextContent).Text, "konan_home") {
+		t.Errorf("where with a konan_home input: %v, result %+v; want a validation error", err, res)
+	}
+	if code := stop(); code != 0 {
+		t.Errorf("exit code = %d", code)
+	}
 }
 
 func TestMCPCommandErrors(t *testing.T) {
@@ -168,7 +194,8 @@ func TestMCPCommandErrors(t *testing.T) {
 	}
 
 	code, stdout, _ = h.run("mcp", "--help")
-	if code != 0 || !strings.Contains(stdout, "--tools") || !strings.Contains(stdout, "search, cat and deps by default") {
+	if code != 0 || !strings.Contains(stdout, "--tools") || !strings.Contains(stdout, "search, cat and deps by default") ||
+		!strings.Contains(stdout, "--konan-home is not an input of a call") {
 		t.Errorf("mcp --help: code = %d\n%s", code, stdout)
 	}
 }

@@ -112,6 +112,23 @@ func TestMCPOverStdio(t *testing.T) {
 		t.Errorf("tools/call with an unknown framework: %v, result %+v", err, res)
 	}
 
+	// A call cannot choose the distribution, and with it the klib program.
+	res, err = session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "search",
+		Arguments: map[string]any{"pattern": "x", "modules": []string{"kn.platform:UserNotifications"}, "konan_home": project},
+	})
+	if err != nil || !res.IsError || !strings.Contains(res.Content[0].(*mcp.TextContent).Text, "konan_home") {
+		t.Errorf("tools/call with konan_home: %v, result %+v; want a validation error", err, res)
+	}
+	// Forbidden rg arguments fail the same way as on the command line.
+	res, err = session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "search",
+		Arguments: map[string]any{"pattern": "x", "modules": []string{"kn.platform:UserNotifications"}, "rg_args": []string{"--pre", "/bin/cat"}},
+	})
+	if err != nil || !res.IsError || !strings.HasPrefix(res.Content[0].(*mcp.TextContent).Text, "E_BAD_ARGS: ") {
+		t.Errorf("tools/call with rg_args --pre: %v, result %+v; want E_BAD_ARGS", err, res)
+	}
+
 	// Closing the session closes the server's stdin; the process exits with 0.
 	if err := session.Close(); err != nil {
 		t.Errorf("closing the session: %v\nstderr: %s", err, serverStderr.String())

@@ -163,10 +163,12 @@ same name and returns what the command prints.
 
 Tools: search, cat and deps by default; where when named in --tools or with
 --tools=all. The global flags given here (--project, --target, --sdk,
---kotlin-version, --konan-home) are the defaults of every tool call; a call
-may override them.`,
+--kotlin-version) are the defaults of every tool call; a call may override
+them. --konan-home is not an input of a call: it is set here or in the
+KONAN_HOME variable, because the server runs the klib program found in it.`,
 		Example: `  ksrc-native mcp
   ksrc-native mcp --tools=all --project /path/to/project
+  ksrc-native --konan-home ~/.konan/kotlin-native-prebuilt-macos-aarch64-2.4.21 mcp
   claude mcp add ksrc-native -- ksrc-native mcp`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

@@ -104,7 +104,9 @@ a protocol with `'@protocol UITableViewDelegate'`. Swift-only frameworks
 command's flags as inputs in snake_case (`pattern`, `modules`, `rg_args`,
 `file_id`, `lines`, `target`, `sdk`) and returns what the command prints. A
 failure is a tool result with `isError` and the `E_CODE: message. Try: hint`
-line.
+line. There is no `konan_home` input: the distribution is chosen when the
+server starts (`ksrc-native --konan-home <path> mcp`). Pick a Kotlin version
+with `kotlin_version` or `project`.
 
 ## Flags
 

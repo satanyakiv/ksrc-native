@@ -193,7 +193,9 @@ func TestToolSchemasMirrorTheFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	common := []string{"konan_home", "kotlin_version", "project", "target", "sdk"}
+	// konan_home is not an input: the distribution holds the klib program the
+	// server runs, so only the person who starts the server may choose it.
+	common := []string{"kotlin_version", "project", "target", "sdk"}
 	want := map[string]struct {
 		required   string
 		properties []string
@@ -210,6 +212,9 @@ func TestToolSchemasMirrorTheFlags(t *testing.T) {
 			t.Fatalf("%s: input schema is %T", tool.Name, tool.InputSchema)
 		}
 		props, _ := schema["properties"].(map[string]any)
+		if _, ok := props["konan_home"]; ok {
+			t.Errorf("%s: konan_home is a tool input", tool.Name)
+		}
 		if len(props) != len(w.properties) {
 			t.Errorf("%s: %d properties, want %d: %v", tool.Name, len(props), len(w.properties), props)
 		}
@@ -387,7 +392,6 @@ func TestFailuresAreToolErrors(t *testing.T) {
 		{"missing file", ToolCat, map[string]any{"file_id": "sdk.apple:UIKit:iphoneos26.4!/Nope.h"}, "E_NO_FILE: ", "Nope.h"},
 		{"bad line range", ToolCat, map[string]any{"file_id": vcFileID, "lines": "x"}, "E_BAD_LINES: ", "cannot parse the line range"},
 		{"unknown SDK", ToolWhere, map[string]any{"coordinate": "sdk.apple:UIKit", "sdk": "watchos"}, "E_NO_SOURCES: ", `"watchos" is not installed`},
-		{"distribution that does not exist", ToolDeps, map[string]any{"konan_home": filepath.Join(t.TempDir(), "nope")}, "E_NO_KONAN: ", "--konan-home"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -545,5 +549,71 @@ func TestSearchInputsAreUntrusted(t *testing.T) {
 	res := call(t, session, ToolSearch, map[string]any{"pattern": "PRESENTVIEWCONTROLLER", "modules": []string{"sdk.apple:UIKit"}, "rg_args": []string{"-i", "-g", "*Controller*", "--max-count", "1"}})
 	if got := texts(t, res); res.IsError || len(got) != 1 || !strings.HasPrefix(got[0], vcFileID+" 2:9:") {
 		t.Errorf("allowed rg_args: IsError = %v, content = %q", res.IsError, got)
+	}
+}
+
+// evilHome builds a directory that passes for a Kotlin/Native distribution
+// and whose klib program leaves a marker when it runs.
+func evilHome(t *testing.T) (home, marker string) {
+	t.Helper()
+	dir := t.TempDir()
+	home = filepath.Join(dir, "kotlin-native-prebuilt-macos-aarch64-2.4.21")
+	marker = filepath.Join(dir, "marker")
+	klib := filepath.Join(home, "klib", "platform", "ios_arm64", "org.jetbrains.kotlin.native.platform.Evil")
+	testutil.WriteFile(t, filepath.Join(klib, "default", "manifest"), []byte("compiler_version=2.4.21\n"), 0o644)
+	testutil.WriteFile(t, filepath.Join(home, "bin", "klib"), []byte("#!/bin/sh\ntouch '"+marker+"'\n"), 0o755)
+	return home, marker
+}
+
+// The distribution is where the klib program comes from. A tool call must
+// not be able to point the server at another one.
+func TestKonanHomeIsNotAToolInput(t *testing.T) {
+	f := newFixture(t)
+	session := f.connect(t, Options{Tools: AllTools})
+	home, marker := evilHome(t)
+
+	calls := map[string]map[string]any{
+		ToolSearch: {"pattern": "x", "modules": []string{"kn.platform:Evil"}, "konan_home": home},
+		ToolCat:    {"file_id": "kn.platform:Evil:2.4.21!/ios_arm64/Evil.kt", "konan_home": home},
+		ToolDeps:   {"konan_home": home},
+		ToolWhere:  {"coordinate": "kn.platform:Evil", "konan_home": home},
+	}
+	for tool, args := range calls {
+		res := call(t, session, tool, args)
+		got := texts(t, res)
+		if !res.IsError || len(got) != 1 || !strings.Contains(got[0], "validating") || !strings.Contains(got[0], "konan_home") {
+			t.Errorf("%s with konan_home: IsError = %v, content = %q; want a validation error that names konan_home", tool, res.IsError, got)
+		}
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a tool call with konan_home ran the klib program of that directory")
+	}
+	if calls := f.dist.KlibCalls(t); len(calls) != 0 {
+		t.Errorf("a refused call ran klib %d times, want 0", len(calls))
+	}
+}
+
+// The start flag --konan-home still chooses the distribution of every call.
+func TestKonanHomeOfTheServerApplies(t *testing.T) {
+	f := newFixture(t)
+	other := testutil.NewDistribution(t, filepath.Join(t.TempDir(), "elsewhere"), "2.4.10")
+	other.AddPlatformKlib(t, "ios_arm64", "UserNotifications", testutil.ReadFixture(t, testutil.UserNotificationsDump))
+
+	session := f.connect(t, Options{Tools: AllTools, Defaults: adapter.Common{KonanHome: other.Home}})
+	res := call(t, session, ToolWhere, map[string]any{"coordinate": unModule})
+	want := filepath.Join(other.Home, "klib", "platform", "ios_arm64", "org.jetbrains.kotlin.native.platform.UserNotifications") + "\n"
+	if got := texts(t, res); res.IsError || got[0] != want {
+		t.Errorf("where on a server started with --konan-home: IsError = %v, content = %q, want %q", res.IsError, got, want)
+	}
+	res = call(t, session, ToolSearch, map[string]any{"pattern": "val UNErrorDomain", "modules": []string{unModule}})
+	if got := texts(t, res); res.IsError || !strings.HasPrefix(got[0], "kn.platform:UserNotifications:2.4.10!/ios_arm64/_toplevel.kt 14:14:") {
+		t.Errorf("search on a server started with --konan-home: IsError = %v, content = %q", res.IsError, got)
+	}
+
+	// A start flag that names no distribution fails every call that needs one.
+	session = f.connect(t, Options{Tools: AllTools, Defaults: adapter.Common{KonanHome: filepath.Join(t.TempDir(), "nope")}})
+	res = call(t, session, ToolDeps, nil)
+	if got := texts(t, res); !res.IsError || !strings.HasPrefix(got[0], "E_NO_KONAN: ") || !strings.Contains(got[0], "--konan-home") {
+		t.Errorf("deps on a server with a bad --konan-home: IsError = %v, content = %q", res.IsError, got)
 	}
 }

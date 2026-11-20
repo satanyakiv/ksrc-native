@@ -137,6 +137,11 @@ adds `where`. A tool takes the flags of its command as inputs in snake_case
 and returns what the command prints. [docs/cli-api.md](docs/cli-api.md) lists
 every input.
 
+The inputs are checked as untrusted values. A tool call cannot choose the
+Kotlin/Native distribution: `--konan-home` is a flag of the server
+(`ksrc-native --konan-home <path> mcp`), not an input. `rg_args` takes the
+same fixed list of ripgrep arguments as the command line.
+
 ### AGENTS.md prompt
 
 For any other agent, paste this into the project's `AGENTS.md`:
