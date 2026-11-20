@@ -8,6 +8,59 @@ developer has while writing `iosMain` code:
 - What does this `kotlinx.cinterop` or native stdlib function do?
 - What does the Objective-C header say about it?
 
+## The problem
+
+Code in `iosMain` calls Apple frameworks through `platform.UIKit`,
+`platform.Foundation` and the other `platform.*` packages. The names in those
+packages are not the names in Apple's documentation. The `cinterop` tool
+generates them from the Objective-C headers, and the result has its own shape:
+
+| Where you look | What you see |
+| --- | --- |
+| Swift documentation | `present(_:animated:completion:)` |
+| Objective-C header | `- (void)presentViewController:(UIViewController *)viewControllerToPresent animated:(BOOL)flag completion:(void (^)(void))completion` |
+| Kotlin, which is what `iosMain` must call | `fun presentViewController(viewControllerToPresent: UIViewController, animated: Boolean, completion: (() -> Unit)?)` |
+
+Protocols get a suffix (`WKNavigationDelegateProtocol`), constants get nullable
+types (`NSURLErrorDomain: String?`), and so on. To write the call, you need the
+Kotlin line.
+
+That line is hard to get outside an IDE:
+
+- Kotlin/Native ships these bindings as `.klib` files with metadata and no
+  source files. There is nothing to grep.
+- [`ksrc`](https://github.com/respawn-llc/ksrc) searches the sources of Gradle
+  dependencies and of the Android SDK. Platform klibs are not a Gradle
+  dependency, so a search there ends with `E_NO_SOURCES`.
+- A coding agent works in a terminal. Without a lookup it writes the call from
+  memory, and a wrong guess shows up only after a slow Kotlin/Native compile.
+
+The same gap exists for two neighbours of the platform klibs: the native stdlib
+with `kotlinx.cinterop` (`memScoped`, `CPointer`, `alloc`), whose sources sit in
+a zip inside the Kotlin/Native distribution, and the Xcode SDK headers, which
+hold the documentation comments.
+
+`ksrc-native` closes this gap. One command returns the Kotlin signature that
+the project's own Kotlin/Native version generates:
+
+```console
+$ ksrc-native search 'fun presentViewController\(' --module kn.platform:UIKit
+kn.platform:UIKit:2.4.21!/ios_arm64/UIViewController.kt 104:24:  public open external fun presentViewController(viewControllerToPresent: platform/UIKit/UIViewController, animated: kotlin/Boolean, completion: kotlin/Function0<kotlin/Unit>?): kotlin/Unit
+```
+
+## Why not another solution
+
+We looked at the alternatives before we wrote a new tool.
+
+| Alternative | Why it was not enough |
+| --- | --- |
+| A change in `ksrc` itself | `ksrc` names source search outside Gradle dependencies and Android SDK platform sources as a non-goal in its `docs/decisions.md`. The three sources here also need no Gradle resolution at all: they come from the Kotlin/Native distribution and from Xcode. A sibling tool with the same verbs keeps `ksrc` small and lets an agent use both with one habit. |
+| An existing MCP server for klib metadata ([`kmp-api-lookup-mcp`](https://www.npmjs.com/package/kmp-api-lookup-mcp)) | It reads the same data, so the idea is sound. Version 0.1.1 did not start for us in November 2026, because one of its dependencies resolved to a newer release with a different export. We also wanted one static binary with no Node.js runtime, and a plain CLI that works in a terminal and in a skill, not only through MCP. |
+| A shell script around `klib dump-metadata` and `grep` | It works in one repository. It has no cache that survives a Kotlin upgrade, no stable output contract, no MCP server, no tests, and nothing to install as a plugin. This was our first plan, and it is how the idea was checked. |
+| Apple's documentation, or the Xcode headers alone | They show the Swift and Objective-C shape, not the Kotlin one. The headers are still worth reading for their comments, so they are the third source of this tool, not a replacement for the first. |
+| "Go to declaration" in an IDE | It shows the same generated stubs, but only to a person who has the project open in the IDE. An agent in a terminal cannot use it, and it cannot search a whole framework for a pattern. |
+| The model's memory, or a web search | An answer from memory is not tied to the Kotlin/Native version that the project builds with, and nothing shows when it is wrong until the compiler does. |
+
 This project is independent. It is not affiliated with Respawn or JetBrains.
 It follows the conventions of [`respawn-llc/ksrc`](https://github.com/respawn-llc/ksrc)
 on purpose: the same verbs, the same output contract, the same error format.
@@ -18,11 +71,9 @@ project; no file is copied from `ksrc`.
 
 ## What it is
 
-Kotlin/Native ships the bindings for Apple frameworks as `.klib` files without
-sources. An IDE can show them. A terminal or an agent cannot. `ksrc-native`
-runs the `klib` tool of the Kotlin/Native distribution once per framework,
-splits its metadata dump into one file per class and caches the result. After
-that, a lookup is a ripgrep search over small text files.
+`ksrc-native` runs the `klib` tool of the Kotlin/Native distribution once per
+framework, splits its metadata dump into one file per class and caches the
+result. After that, a lookup is a ripgrep search over small text files.
 
 It reads three kinds of modules:
 
