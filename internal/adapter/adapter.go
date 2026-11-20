@@ -53,6 +53,14 @@ func New(stdout, stderr io.Writer) *Adapter {
 	}
 }
 
+// env reads a variable of the environment the adapter was given.
+func (a *Adapter) env(key string) string {
+	if a.Getenv == nil {
+		return ""
+	}
+	return a.Getenv(key)
+}
+
 // WithOutput returns a copy of the adapter that writes to other streams. The
 // MCP server uses it to capture the output of one tool call.
 func (a *Adapter) WithOutput(stdout, stderr io.Writer) *Adapter {

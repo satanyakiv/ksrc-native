@@ -150,9 +150,11 @@ sdk.apple:<Framework>:<sdk> (<n> frameworks with headers, <sdk path>)
 The `sdk.apple` line stands for all frameworks of one installed SDK;
 `<Framework>` is literal there. A source that is not available is reported on
 stderr as `ksrc-native: skipped: <error>` and left out. The command fails when
-nothing can be listed, when `--konan-home` or `--kotlin-version` names a
-distribution that cannot be used, or when `--target` is not a target of the
-distribution that was found.
+nothing can be listed, when `--konan-home`, the `KONAN_HOME` variable or
+`--kotlin-version` names a distribution that cannot be used, or when
+`--target` is not a target of the distribution that was found. Only a
+distribution that nobody named is skipped: no flag, no variable, and nothing
+under `~/.konan`.
 
 ### `where <coordinate>`
 
@@ -265,7 +267,7 @@ cache.
 
 | Variable | Meaning |
 | --- | --- |
-| `KONAN_HOME` | path of the distribution; second in the discovery order |
+| `KONAN_HOME` | path of the distribution; second in the discovery order. A value that is set and is not a distribution fails every `kn.*` operation and `deps` with `E_NO_KONAN` |
 | `KONAN_DATA_DIR` | directory that holds the distributions instead of `~/.konan` |
 | `KSRC_NATIVE_CACHE_DIR` | cache directory instead of the user cache directory |
 

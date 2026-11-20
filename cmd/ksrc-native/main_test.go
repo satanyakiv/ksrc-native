@@ -214,3 +214,32 @@ func TestExitCodes(t *testing.T) {
 		})
 	}
 }
+
+// run executes the binary with extra environment variables and returns its
+// exit code, stdout and stderr.
+func run(t *testing.T, bin string, env []string, args ...string) (int, string, string) {
+	t.Helper()
+	cmd := exec.Command(bin, args...)
+	cmd.Env = env
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	var exit *exec.ExitError
+	switch {
+	case errors.As(err, &exit):
+		return exit.ExitCode(), stdout.String(), stderr.String()
+	case err != nil:
+		t.Fatalf("cannot run the binary: %v", err)
+	}
+	return 0, stdout.String(), stderr.String()
+}
+
+// A KONAN_HOME that is set and wrong must not hide behind the SDK list.
+func TestDepsWithAKonanHomeVariableThatCannotBeUsed(t *testing.T) {
+	bin, env, project := buildBinary(t)
+	nope := filepath.Join(project, "nope")
+	code, stdout, stderr := run(t, bin, append(env, "KONAN_HOME="+nope), "--project", project, "deps")
+	if code != 1 || stdout != "" || !strings.HasPrefix(stderr, "E_NO_KONAN: KONAN_HOME points at "+nope) {
+		t.Errorf("deps with KONAN_HOME=%s: code = %d, stdout = %q, stderr = %q; want 1, nothing and E_NO_KONAN that names the variable", nope, code, stdout, stderr)
+	}
+}

@@ -25,7 +25,8 @@ type DepsRequest struct {
 // stands for all frameworks of one installed SDK; <Framework> is literal
 // there. A source that is not available is reported on stderr and skipped;
 // Deps fails when nothing can be listed, when the caller named a
-// distribution (--konan-home, --kotlin-version) that cannot be used, or when
+// distribution (--konan-home, KONAN_HOME, --kotlin-version) that cannot be
+// used, or when
 // --target is not a target of the distribution that was found.
 func (a *Adapter) Deps(ctx context.Context, req DepsRequest) error {
 	return coded(a.deps(ctx, req))
@@ -37,8 +38,9 @@ func (a *Adapter) deps(ctx context.Context, req DepsRequest) error {
 		return err
 	}
 	// A distribution that was asked for by name is not optional: skipping it
-	// would hide a typo behind a list of SDKs and a zero exit code.
-	if req.KonanHome != "" || req.KotlinVersion != "" {
+	// would hide a typo behind a list of SDKs and a zero exit code. The
+	// KONAN_HOME variable names one as plainly as the flags do.
+	if req.KonanHome != "" || req.KotlinVersion != "" || a.env("KONAN_HOME") != "" {
 		if _, err := r.distribution(); err != nil {
 			return err
 		}
