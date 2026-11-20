@@ -1,0 +1,36 @@
+{
+  "name": "ksrc-native",
+  "version": "0.1.0",
+  "description": "Search and read Kotlin/Native platform API signatures (platform.UIKit, platform.Foundation), the native stdlib sources and Xcode SDK headers. Needs the ksrc-native binary on PATH.",
+  "author": {
+    "name": "satanyakiv",
+    "url": "https://github.com/satanyakiv"
+  },
+  "homepage": "https://github.com/satanyakiv/ksrc-native#readme",
+  "repository": "https://github.com/satanyakiv/ksrc-native",
+  "license": "Apache-2.0",
+  "keywords": [
+    "kotlin",
+    "kotlin-native",
+    "kotlin-multiplatform",
+    "ios",
+    "cinterop",
+    "klib",
+    "xcode"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ksrc-native",
+    "shortDescription": "Look up Kotlin/Native platform APIs, the native stdlib and Xcode SDK headers",
+    "longDescription": "A skill that teaches the agent to run the ksrc-native command: search a Kotlin/Native platform library, the native stdlib sources or the Objective-C headers of an Xcode SDK, then read the file a hit points at. The ksrc-native binary must be on PATH.",
+    "developerName": "satanyakiv",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read"
+    ],
+    "websiteURL": "https://github.com/satanyakiv/ksrc-native",
+    "defaultPrompt": [
+      "Show the Kotlin signature of UIApplication.openURL with ksrc-native."
+    ]
+  }
+}

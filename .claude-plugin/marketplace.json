@@ -1,0 +1,30 @@
+{
+  "name": "ksrc-native",
+  "owner": {
+    "name": "satanyakiv",
+    "url": "https://github.com/satanyakiv"
+  },
+  "metadata": {
+    "description": "The ksrc-native plugin, served from its own repository",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "ksrc-native",
+      "source": "./",
+      "description": "Search and read Kotlin/Native platform API signatures, the native stdlib sources and Xcode SDK headers. Needs the ksrc-native binary on PATH.",
+      "version": "0.1.0",
+      "author": {
+        "name": "satanyakiv"
+      },
+      "category": "development",
+      "keywords": [
+        "kotlin",
+        "kotlin-native",
+        "kotlin-multiplatform",
+        "ios",
+        "cinterop"
+      ]
+    }
+  ]
+}
