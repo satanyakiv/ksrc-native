@@ -58,7 +58,7 @@ func TestDoctorOnLinuxIsHealthyWithoutIOSAndXcode(t *testing.T) {
 		t.Fatalf("Doctor() on a healthy Linux install: error = %v\n%s", err, w.stdout.String())
 	}
 	out := w.stdout.String()
-	if got, want := doctorLine(t, out, "platform"), "platform: ok - 1 libraries for linux_x64, the host target: the distribution has no ios_arm64 (3 targets in the distribution)"; got != want {
+	if got, want := doctorLine(t, out, "platform"), "platform: ok - 1 library for linux_x64, the host target: the distribution has no ios_arm64 (3 targets in the distribution)"; got != want {
 		t.Errorf("platform line = %q\nwant            %q", got, want)
 	}
 	if got, want := doctorLine(t, out, "xcode"), "xcode: unavailable - Apple SDKs come with Xcode, which runs on macOS only; sdk.apple cannot be searched on linux"; got != want {
@@ -81,7 +81,7 @@ func TestDoctorOnMacNamesNoHostTarget(t *testing.T) {
 	if err := w.a.Doctor(context.Background(), DoctorRequest{}); err != nil {
 		t.Fatalf("Doctor() error = %v", err)
 	}
-	if got, want := doctorLine(t, w.stdout.String(), "platform"), "platform: ok - 1 libraries for ios_arm64 (2 targets in the distribution)"; got != want {
+	if got, want := doctorLine(t, w.stdout.String(), "platform"), "platform: ok - 1 library for ios_arm64 (2 targets in the distribution)"; got != want {
 		t.Errorf("platform line = %q, want %q", got, want)
 	}
 }

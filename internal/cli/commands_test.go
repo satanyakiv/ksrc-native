@@ -123,8 +123,8 @@ func TestDepsCommand(t *testing.T) {
 	for i, prefix := range []string{
 		"kn.platform:UserNotifications:2.4.21 (ios_arm64, dump cached: no)",
 		"kn.stdlib:native:2.4.21 (extracted: no, ",
-		"sdk.apple:<Framework>:iphoneos26.4 (1 frameworks with headers, ",
-		"sdk.apple:<Framework>:macosx26.4 (1 frameworks with headers, ",
+		"sdk.apple:<Framework>:iphoneos26.4 (1 framework with headers, ",
+		"sdk.apple:<Framework>:macosx26.4 (1 framework with headers, ",
 	} {
 		if !strings.HasPrefix(lines[i], prefix) {
 			t.Errorf("deps line %d = %q, want prefix %q", i+1, lines[i], prefix)
@@ -206,7 +206,7 @@ func TestDoctorReportsStdlibAndXcode(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("doctor: code = %d\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
 	}
-	for _, part := range []string{"stdlib: ok - ", "(extracted: no)", "xcode: ok - SDK iphoneos26.4 at ", "(1 frameworks with headers)"} {
+	for _, part := range []string{"stdlib: ok - ", "(extracted: no)", "xcode: ok - SDK iphoneos26.4 at ", "(1 framework with headers)"} {
 		if !strings.Contains(stdout, part) {
 			t.Errorf("doctor output lacks %q:\n%s", part, stdout)
 		}
@@ -410,7 +410,7 @@ func TestTargetIsPickedWhenTheFlagIsNotGiven(t *testing.T) {
 	if code, stdout, stderr := h.run("deps"); code != 0 || stdout != "kn.platform:posix:2.4.21 (linux_x64, dump cached: no)\n" || stderr != "" {
 		t.Errorf("deps on Linux: code = %d, stdout = %q, stderr = %q; want the posix line of linux_x64", code, stdout, stderr)
 	}
-	if code, stdout, stderr := h.run("doctor"); code != 0 || !strings.Contains(stdout, "platform: ok - 1 libraries for linux_x64, the host target") {
+	if code, stdout, stderr := h.run("doctor"); code != 0 || !strings.Contains(stdout, "platform: ok - 1 library for linux_x64, the host target") {
 		t.Errorf("doctor on Linux: code = %d, stderr = %q, stdout:\n%s", code, stderr, stdout)
 	}
 	if code, stdout, _ := h.run("search", "val UNErrorDomain", "--module", "kn.platform:posix"); code != 0 || !strings.HasPrefix(stdout, "kn.platform:posix:2.4.21!/linux_x64/_toplevel.kt ") {

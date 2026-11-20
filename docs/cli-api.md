@@ -250,8 +250,9 @@ Lists the cache entries with their sizes, then deletes them.
 | no terminal, no `-y` | nothing is deleted; the output says so |
 
 A count of one is written in the singular: `total: 1 entry`, `Delete 1 entry
-(size)?`, `deleted 1 entry`, and `1 platform dump` in the `cache` line of
-`doctor`.
+(size)?`, `deleted 1 entry`. The same holds for the counts of `doctor`
+(`1 library`, `1 target`, `1 framework with headers`, `1 platform dump`) and
+for `1 framework with headers` in the `sdk.apple` line of `deps`.
 
 Only the tool's own cache directories are removed. Other files in the cache
 root stay.

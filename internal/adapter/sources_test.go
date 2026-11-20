@@ -347,9 +347,9 @@ func TestDeps(t *testing.T) {
 		"kn.platform:Foundation:2.4.21 (ios_arm64, dump cached: no)",
 		"kn.platform:UserNotifications:2.4.21 (ios_arm64, dump cached: yes)",
 		"kn.stdlib:native:2.4.21 (extracted: no, " + zipPath + ")",
-		"sdk.apple:<Framework>:iphoneos26.4 (1 frameworks with headers, " + realPath(t, filepath.Join(sdks, "iPhoneOS.platform", "Developer", "SDKs", "iPhoneOS.sdk")) + ")",
-		"sdk.apple:<Framework>:iphonesimulator26.4 (1 frameworks with headers, " + realPath(t, filepath.Join(sdks, "iPhoneSimulator.platform", "Developer", "SDKs", "iPhoneSimulator.sdk")) + ")",
-		"sdk.apple:<Framework>:macosx26.4 (1 frameworks with headers, " + realPath(t, filepath.Join(sdks, "MacOSX.platform", "Developer", "SDKs", "MacOSX.sdk")) + ")",
+		"sdk.apple:<Framework>:iphoneos26.4 (1 framework with headers, " + realPath(t, filepath.Join(sdks, "iPhoneOS.platform", "Developer", "SDKs", "iPhoneOS.sdk")) + ")",
+		"sdk.apple:<Framework>:iphonesimulator26.4 (1 framework with headers, " + realPath(t, filepath.Join(sdks, "iPhoneSimulator.platform", "Developer", "SDKs", "iPhoneSimulator.sdk")) + ")",
+		"sdk.apple:<Framework>:macosx26.4 (1 framework with headers, " + realPath(t, filepath.Join(sdks, "MacOSX.platform", "Developer", "SDKs", "MacOSX.sdk")) + ")",
 		"",
 	}, "\n")
 	if w.stdout.String() != want {

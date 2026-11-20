@@ -134,7 +134,7 @@ func (a *Adapter) depsApple(ctx context.Context, out *bufio.Writer, printed *int
 			"install Xcode, then select it with `sudo xcode-select -s /Applications/Xcode.app`")
 	}
 	for _, sdk := range sdks {
-		fmt.Fprintf(out, "%s:<Framework>:%s (%d frameworks with headers, %s)\n", provider.AppleGroup, sdk.Name, len(sdk.Frameworks()), sdk.Path)
+		fmt.Fprintf(out, "%s:<Framework>:%s (%s, %s)\n", provider.AppleGroup, sdk.Name, frameworksWithHeaders(sdk.Frameworks()), sdk.Path)
 		*printed++
 	}
 	return nil
@@ -145,4 +145,9 @@ func yesNo(b bool) string {
 		return "yes"
 	}
 	return "no"
+}
+
+// frameworksWithHeaders is the count that deps and doctor print for one SDK.
+func frameworksWithHeaders(frameworks []string) string {
+	return counted(len(frameworks), "framework with headers", "frameworks with headers")
 }

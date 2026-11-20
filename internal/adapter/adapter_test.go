@@ -413,10 +413,10 @@ func TestDoctor(t *testing.T) {
 		"(ripgrep ",
 		"kotlin-native: ok - 2.4.21 at " + w.dist.Home + " (also installed: 2.4.10)",
 		"klib: ok - " + filepath.Join(w.dist.Home, "bin", "klib"),
-		"platform: ok - 1 libraries for ios_arm64 (2 targets in the distribution)",
+		"platform: ok - 1 library for ios_arm64 (2 targets in the distribution)",
 		"stdlib: unavailable - no sources zip at ",
 		"xcode: ok - SDK iphoneos26.4 at ",
-		"(1 frameworks with headers)",
+		"(1 framework with headers)",
 		"cache: ok - " + w.env[cache.EnvDir] + " (0 platform dumps, 0 B)",
 	} {
 		if !strings.Contains(out, part) {

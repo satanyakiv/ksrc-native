@@ -112,7 +112,7 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 				// Nobody asked for this target, so the line says why it is here.
 				name += ", the host target: the distribution has no " + konan.DefaultTarget
 			}
-			report("platform", true, fmt.Sprintf("%d libraries for %s (%d targets in the distribution)", len(frameworks), name, len(dist.Targets())))
+			report("platform", true, fmt.Sprintf("%s for %s (%s in the distribution)", counted(len(frameworks), "library", "libraries"), name, counted(len(dist.Targets()), "target", "targets")))
 		}
 
 		stdlib := &provider.Stdlib{Dist: dist, Cache: store}
@@ -129,7 +129,7 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 	} else if sdk, err := xcode.Find(ctx, a.runner(), req.sdk()); err != nil {
 		optional("xcode", false, err.Error())
 	} else {
-		optional("xcode", true, fmt.Sprintf("SDK %s at %s (%d frameworks with headers)", sdk.Name, sdk.Path, len(sdk.Frameworks())))
+		optional("xcode", true, fmt.Sprintf("SDK %s at %s (%s)", sdk.Name, sdk.Path, frameworksWithHeaders(sdk.Frameworks())))
 	}
 
 	// cache
