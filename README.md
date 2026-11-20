@@ -91,10 +91,14 @@ Requirements:
 - A JDK on `PATH` for `kn.platform` modules. The `klib` tool runs on the JVM.
 - Xcode for `sdk.apple` modules. The other two kinds work without it.
 
-macOS is the main platform. Linux binaries are built as well. On Linux there
-are no `sdk.apple` modules, and the distribution has no Apple targets, so pass
-a target it has, for example `--target linux_x64`. Windows is not supported in
-0.1.
+macOS is the main platform. Linux binaries are built as well. On Linux
+`kn.platform` and `kn.stdlib` work, and there are no `sdk.apple` modules:
+Apple SDKs come with Xcode. A Kotlin/Native distribution for Linux has no
+Apple targets, so without `--target` the tool uses the host target of the
+distribution, `linux_x64`, and `doctor` says so in its `platform` line. Kotlin
+publishes a Linux distribution for x86_64 only (checked on Maven Central for
+2.2.20 and 2.3.0). The linux/arm64 binary needs a distribution you provide
+with `--konan-home` or `KONAN_HOME`. Windows is not supported in 0.1.
 
 `ksrc-native doctor` shows what the tool found:
 
@@ -276,7 +280,8 @@ The first search of a framework builds its dump. On an Apple silicon Mac that
 took 0.3 s for CoreLocation and about 5 s for UIKit. Later searches read the
 cache and take about 0.01 s.
 
-`--target` picks the Kotlin/Native target. The default is `ios_arm64`. Use
+`--target` picks the Kotlin/Native target. The default is `ios_arm64`, or the
+host target (for example `linux_x64`) in a distribution without it. Use
 `ios_simulator_arm64`, `macos_arm64` and so on when an API differs per target.
 The value must be the exact name of a target of the distribution;
 `ksrc-native doctor` shows how many there are, and the error for a wrong one

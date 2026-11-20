@@ -137,7 +137,7 @@ Typical flow:
 	pf.StringVar(&flags.konanHome, "konan-home", "", "`path` of the Kotlin/Native distribution (default: discovered; the doctor command shows it)")
 	pf.StringVar(&flags.kotlinVersion, "kotlin-version", "", "Kotlin version of the distribution to use, for example 2.4.21")
 	pf.StringVar(&flags.project, "project", ".", "project directory; the Kotlin version is read from its gradle/libs.versions.toml")
-	pf.StringVar(&flags.target, "target", konan.DefaultTarget, "Kotlin/Native target of the platform libraries")
+	pf.StringVar(&flags.target, "target", "", "Kotlin/Native target of the platform libraries (default: "+konan.DefaultTarget+", or the host target of a distribution without it, such as linux_x64)")
 	pf.StringVar(&flags.sdk, "sdk", xcode.DefaultSDK, "Apple SDK of sdk.apple modules, for example iphoneos, iphonesimulator, macosx")
 
 	root.AddCommand(
@@ -320,7 +320,8 @@ func newDeps(a *adapter.Adapter, flags *common) *cobra.Command {
 		Short: "List the modules that can be searched",
 		Long: `Deps prints one module per line: the platform libraries of --target with the
 state of their cached dump, the stdlib sources, and the installed Apple SDKs.
-An sdk.apple line stands for all frameworks of one SDK.`,
+An sdk.apple line stands for all frameworks of one SDK. Off macOS there are
+no sdk.apple lines.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return a.Deps(cmd.Context(), adapter.DepsRequest{Common: flags.request()})
@@ -355,6 +356,10 @@ func newDoctor(a *adapter.Adapter, flags *common) *cobra.Command {
 A line is "<part>: ok - <details>", "<part>: MISSING - <what to do>" for a
 part the tool cannot work without, or "<part>: unavailable - <what to do>"
 for an optional one. With a MISSING line the command exits with 1.
+
+The platform line names the target. Without --target it is ios_arm64, or
+the host target (linux_x64, ...) of a distribution that has no ios_arm64.
+Off macOS the xcode line is "unavailable".
 
 The java line runs "java -version" with the java the klib tool will use:
 $JAVA_HOME/bin/java when it is executable, else java on PATH. The cache line

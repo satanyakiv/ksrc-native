@@ -70,6 +70,8 @@ func newWorld(t *testing.T) *world {
 		Getenv:     func(key string) string { return w.env[key] },
 		UserHome:   home,
 		IsTerminal: func() bool { return false },
+		GOOS:       "darwin",
+		GOARCH:     "arm64",
 	}
 	return w
 }

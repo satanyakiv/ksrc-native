@@ -299,3 +299,26 @@ check repeats the rule of a script the tool does not own; if `run_konan`
 changes how it picks java, `doctor` and klib can disagree. The cache check
 uses `access(2)` on macOS and Linux only; on another system the line stays
 `ok` until the first write fails.
+
+## 2026-11-20: Without `--target`, a distribution without iOS gets its host target
+
+**Decision.** `--target` has no fixed default. When it is not given, the
+target is `ios_arm64` if the distribution has its platform libraries. If not,
+it is the host target: the one in the name of the distribution directory
+(`linux-x86_64` gives `linux_x64`), then the one of the system the tool runs
+on. `doctor` names the picked target and says why. `deps` prints the stdlib
+line whatever the target is. Off macOS `deps` prints no `sdk.apple` lines and
+no note about them, and `doctor` shows `xcode` as `unavailable` without
+running a program.
+
+**Why.** A Kotlin/Native distribution for Linux has no Apple targets. With
+`ios_arm64` as a fixed default, `doctor` exited with 1 on a healthy Linux
+install, `deps` failed before it printed the stdlib line, and both printed an
+"install Xcode" hint that nobody on Linux can follow. The flag default also
+made a target nobody typed look like one the caller named.
+
+**Cost.** The same command line can mean two targets on two machines. A
+target given with `--target` is never replaced, and a file-id carries its
+target, so `cat` is not affected. The system the tool runs on is a field of
+the adapter (`GOOS`, `GOARCH`), so tests can be a Linux machine on a Mac. The
+Linux path is covered by tests with a fake distribution only.

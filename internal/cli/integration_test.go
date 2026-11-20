@@ -61,6 +61,8 @@ func TestRealDistribution(t *testing.T) {
 		UserHome:   home,
 		Stdin:      strings.NewReader(""),
 		IsTerminal: func() bool { return false },
+		GOOS:       "darwin",
+		GOARCH:     "arm64",
 	}
 	run := func(args ...string) (int, string, string) {
 		out.Reset()

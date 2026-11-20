@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"time"
 
 	"golang.org/x/term"
@@ -32,6 +33,8 @@ type Adapter struct {
 	Getenv     func(string) string // environment lookup
 	UserHome   string              // the user's home directory
 	IsTerminal func() bool         // whether a person can answer a prompt
+	GOOS       string              // the system the tool runs on, as runtime.GOOS names it
+	GOARCH     string              // its architecture, as runtime.GOARCH names it
 
 	// limit replaces deadlineOf in tests.
 	limit func(program string) time.Duration
@@ -50,6 +53,8 @@ func New(stdout, stderr io.Writer) *Adapter {
 		IsTerminal: func() bool {
 			return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 		},
+		GOOS:   runtime.GOOS,
+		GOARCH: runtime.GOARCH,
 	}
 }
 
@@ -76,13 +81,6 @@ type Common struct {
 	Project       string // --project
 	Target        string // --target
 	SDK           string // --sdk
-}
-
-func (c Common) target() string {
-	if c.Target == "" {
-		return konan.DefaultTarget
-	}
-	return c.Target
 }
 
 func (c Common) sdk() string {
@@ -249,8 +247,28 @@ func (r *resolver) provider(req provider.Request) (provider.Provider, error) {
 	return nil, knownGroup(req.Coordinate)
 }
 
+// target returns the Kotlin/Native target of the operation: --target when
+// the caller gave one, else what the distribution offers, which is ios_arm64
+// or, in a distribution without it, the host target. The answer needs the
+// distribution, so only code that works on kn.platform may ask; an
+// sdk.apple module must not start a search for one.
+func (r *resolver) target() string {
+	if r.common.Target != "" {
+		return r.common.Target
+	}
+	dist, err := r.distribution()
+	if err != nil {
+		return konan.DefaultTarget
+	}
+	return dist.PickTarget(r.a.GOOS, r.a.GOARCH)
+}
+
 func (r *resolver) request(c provider.Coordinate) provider.Request {
-	return provider.Request{Coordinate: c, Target: r.common.target(), SDK: r.common.sdk()}
+	req := provider.Request{Coordinate: c, SDK: r.common.sdk()}
+	if c.Group == provider.PlatformGroup {
+		req.Target = r.target()
+	}
+	return req
 }
 
 // coded makes sure an error leaves the adapter with a stable code.

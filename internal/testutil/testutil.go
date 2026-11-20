@@ -69,7 +69,14 @@ type Distribution struct {
 // dataDir. Its bin/klib is the fake tool from testdata/fake-klib.
 func NewDistribution(tb testing.TB, dataDir, version string) Distribution {
 	tb.Helper()
-	home := filepath.Join(dataDir, "kotlin-native-prebuilt-macos-aarch64-"+version)
+	return NewDistributionFor(tb, dataDir, "macos-aarch64", version)
+}
+
+// NewDistributionFor creates a distribution of another host, for example
+// "linux-x86_64". The host is part of the directory name, as in ~/.konan.
+func NewDistributionFor(tb testing.TB, dataDir, host, version string) Distribution {
+	tb.Helper()
+	home := filepath.Join(dataDir, "kotlin-native-prebuilt-"+host+"-"+version)
 	if err := os.MkdirAll(filepath.Join(home, "klib", "platform"), 0o755); err != nil {
 		tb.Fatalf("testutil: %v", err)
 	}

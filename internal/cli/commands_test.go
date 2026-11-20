@@ -395,3 +395,32 @@ func TestTargetAndSDKFromTheCommandLine(t *testing.T) {
 		t.Errorf("search after the refused targets: code = %d, stdout = %q, stderr = %q", code, stdout, stderr)
 	}
 }
+
+// --target has no fixed default: a flag that always said ios_arm64 would
+// look like a target the caller named, and a Linux distribution has none.
+func TestTargetIsPickedWhenTheFlagIsNotGiven(t *testing.T) {
+	h := newHarness(t)
+	home := t.TempDir()
+	linux := testutil.NewDistributionFor(t, filepath.Join(home, ".konan"), "linux-x86_64", "2.4.21")
+	linux.AddPlatformKlib(t, "linux_x64", "posix", testutil.ReadFixture(t, testutil.UserNotificationsDump))
+	h.a.UserHome = home
+	h.a.GOOS, h.a.GOARCH = "linux", "amd64"
+
+	if code, stdout, stderr := h.run("deps"); code != 0 || stdout != "kn.platform:posix:2.4.21 (linux_x64, dump cached: no)\n" || stderr != "" {
+		t.Errorf("deps on Linux: code = %d, stdout = %q, stderr = %q; want the posix line of linux_x64", code, stdout, stderr)
+	}
+	if code, stdout, stderr := h.run("doctor"); code != 0 || !strings.Contains(stdout, "platform: ok - 1 libraries for linux_x64, the host target") {
+		t.Errorf("doctor on Linux: code = %d, stderr = %q, stdout:\n%s", code, stderr, stdout)
+	}
+	if code, stdout, _ := h.run("search", "val UNErrorDomain", "--module", "kn.platform:posix"); code != 0 || !strings.HasPrefix(stdout, "kn.platform:posix:2.4.21!/linux_x64/_toplevel.kt ") {
+		t.Errorf("search on Linux: code = %d, stdout = %q; want a hit in linux_x64", code, stdout)
+	}
+	if code, stdout, stderr := h.run("deps", "--target", "ios_arm64"); code != 1 || stdout != "" || !strings.HasPrefix(stderr, "E_NO_SOURCES: ") {
+		t.Errorf("deps --target ios_arm64 on Linux: code = %d, stdout = %q, stderr = %q; want E_NO_SOURCES", code, stdout, stderr)
+	}
+
+	_, help, _ := h.run("--help")
+	if !strings.Contains(help, "--target") || !strings.Contains(help, "default: ios_arm64, or the host target") {
+		t.Errorf("--help does not say how the target is picked:\n%s", help)
+	}
+}

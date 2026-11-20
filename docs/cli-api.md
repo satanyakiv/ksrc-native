@@ -27,7 +27,7 @@ version part of an `sdk.apple` coordinate is an SDK name, so it may differ.
 | `--konan-home <path>` | discovered | path of the Kotlin/Native distribution |
 | `--kotlin-version <version>` | discovered | Kotlin version of the distribution to use, for example `2.4.21` |
 | `--project <dir>` | `.` | project directory; the Kotlin version is read from its `gradle/libs.versions.toml` |
-| `--target <target>` | `ios_arm64` | Kotlin/Native target of the platform libraries |
+| `--target <target>` | `ios_arm64`, or the host target | Kotlin/Native target of the platform libraries |
 | `--sdk <sdk>` | `iphoneos` | Apple SDK of `sdk.apple` modules |
 | `--version`, `-v` | | print `ksrc-native <version>` |
 | `--help`, `-h` | | help for the tool or a command |
@@ -40,6 +40,16 @@ is not installed, the newest one is used and a note on stderr says so:
 `ksrc-native: the project uses Kotlin <version>, but ...; using <version>`.
 
 An SDK named in an `sdk.apple` coordinate wins over `--sdk`.
+
+Without `--target` the target is `ios_arm64` when the distribution has its
+platform libraries. A distribution for Linux or Windows has no Apple targets.
+There the tool uses the host target: first the one in the name of the
+distribution directory (`kotlin-native-prebuilt-linux-x86_64-<version>` gives
+`linux_x64`), then the one of the system the tool runs on (`linux_x64`,
+`linux_arm64`, `macos_arm64`, `macos_x64`, `mingw_x64`). When the
+distribution has neither, the target stays `ios_arm64` and a `kn.platform`
+command fails with `E_NO_SOURCES` and the list of targets. A target given
+with `--target` is never replaced.
 
 `--target` and `--sdk` are checked before anything is read or built:
 
@@ -148,11 +158,14 @@ sdk.apple:<Framework>:<sdk> (<n> frameworks with headers, <sdk path>)
 ```
 
 The `sdk.apple` line stands for all frameworks of one installed SDK;
-`<Framework>` is literal there. A source that is not available is reported on
+`<Framework>` is literal there. The `kn.stdlib` line needs no target: it is
+printed for a distribution that lacks the platform libraries of the target
+too. Off macOS the `sdk.apple` lines are left out without a note. A source
+that is not available is reported on
 stderr as `ksrc-native: skipped: <error>` and left out. The command fails when
 nothing can be listed, when `--konan-home`, the `KONAN_HOME` variable or
 `--kotlin-version` names a distribution that cannot be used, or when
-`--target` is not a target of the distribution that was found. Only a
+`--target` names a target the distribution that was found does not have. Only a
 distribution that nobody named is skipped: no flag, no variable, and nothing
 under `~/.konan`.
 
@@ -171,6 +184,11 @@ Prints one line per part: `rg`, `kotlin-native`, `klib`, `java`, `platform`,
 | `ok` | found and usable |
 | `MISSING` | a required part is absent or does not work; the command exits with 1 and `E_DOCTOR` |
 | `unavailable` | an optional part (`stdlib`, `xcode`) is absent; the exit code stays 0 |
+
+The `platform` line names the target. When no `--target` was given and the
+distribution has no `ios_arm64`, it reads `<n> libraries for linux_x64, the
+host target: the distribution has no ios_arm64 (...)`. Off macOS the `xcode`
+line is `unavailable` and no program is run for it.
 
 Two lines do more than look for a file:
 

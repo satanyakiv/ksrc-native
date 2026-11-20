@@ -103,11 +103,16 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 			report("java", true, fmt.Sprintf("%s (%s)", java, version))
 		}
 
-		target := req.target()
+		target := r.target()
 		if frameworks := dist.Frameworks(target); dist.RequireTarget(target) != nil {
 			report("platform", false, fmt.Sprintf("no platform libraries for target %s; available targets: %s", target, strings.Join(dist.Targets(), ", ")))
 		} else {
-			report("platform", true, fmt.Sprintf("%d libraries for %s (%d targets in the distribution)", len(frameworks), target, len(dist.Targets())))
+			name := target
+			if req.Target == "" && target != konan.DefaultTarget {
+				// Nobody asked for this target, so the line says why it is here.
+				name += ", the host target: the distribution has no " + konan.DefaultTarget
+			}
+			report("platform", true, fmt.Sprintf("%d libraries for %s (%d targets in the distribution)", len(frameworks), name, len(dist.Targets())))
 		}
 
 		stdlib := &provider.Stdlib{Dist: dist, Cache: store}
@@ -119,7 +124,9 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 	}
 
 	// Xcode, for sdk.apple
-	if sdk, err := xcode.Find(ctx, a.runner(), req.sdk()); err != nil {
+	if a.GOOS != "darwin" {
+		optional("xcode", false, "Apple SDKs come with Xcode, which runs on macOS only; sdk.apple cannot be searched on "+a.GOOS)
+	} else if sdk, err := xcode.Find(ctx, a.runner(), req.sdk()); err != nil {
 		optional("xcode", false, err.Error())
 	} else {
 		optional("xcode", true, fmt.Sprintf("SDK %s at %s (%d frameworks with headers)", sdk.Name, sdk.Path, len(sdk.Frameworks())))

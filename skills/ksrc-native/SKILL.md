@@ -118,7 +118,8 @@ pattern, name one module, or read a file with `cat` and `lines`.
 
 - `--module <coordinate>` (repeatable, short `-m`). For `kn.platform` the name
   is what follows `import platform.`.
-- `--target <target>`: default `ios_arm64`; use `ios_simulator_arm64`,
+- `--target <target>`: default `ios_arm64`, or the host target (`linux_x64`)
+  in a distribution without it; use `ios_simulator_arm64`,
   `macos_arm64` and so on when the platform API differs per target. Write the
   name exactly, in lower case; a wrong one is `E_NO_SOURCES` with the list.
 - `--sdk <sdk>`: Apple SDK of `sdk.apple` modules; default `iphoneos`. Also

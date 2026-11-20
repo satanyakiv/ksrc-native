@@ -78,6 +78,8 @@ func newHarness(t *testing.T) *harness {
 		},
 		UserHome:   home,
 		IsTerminal: func() bool { return false },
+		GOOS:       "darwin",
+		GOARCH:     "arm64",
 	}
 	return h
 }

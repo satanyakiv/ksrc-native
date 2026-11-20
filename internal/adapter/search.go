@@ -86,7 +86,7 @@ func (a *Adapter) search(ctx context.Context, req SearchRequest) error {
 		return err
 	}
 	if matches == 0 {
-		fmt.Fprintf(a.Stderr, "ksrc-native: no matches for %q in %s\n", req.Pattern, describeSources(sources, req.Common))
+		fmt.Fprintf(a.Stderr, "ksrc-native: no matches for %q in %s\n", req.Pattern, describeSources(sources, r.target))
 	}
 	return nil
 }
@@ -121,11 +121,11 @@ func (a *Adapter) searchSources(ctx context.Context, r *resolver, req SearchRequ
 	}
 
 	if req.AllPlatform {
-		platform, err := r.platform(r.common.target())
+		platform, err := r.platform(r.target())
 		if err != nil {
 			return nil, err
 		}
-		for _, name := range platform.Dist.Frameworks(r.common.target()) {
+		for _, name := range platform.Dist.Frameworks(r.target()) {
 			src, err := platform.Resolve(ctx, r.request(provider.Coordinate{Group: provider.PlatformGroup, Name: name}))
 			if err != nil {
 				// A library without declarations is not a reason to stop.
@@ -139,12 +139,12 @@ func (a *Adapter) searchSources(ctx context.Context, r *resolver, req SearchRequ
 	}
 
 	if len(coords) == 0 {
-		platform, err := r.platform(r.common.target())
+		platform, err := r.platform(r.target())
 		if err != nil {
 			return nil, err
 		}
 		if !req.AllPlatform {
-			for _, src := range platform.Cached(r.common.target()) {
+			for _, src := range platform.Cached(r.target()) {
 				add(src)
 			}
 		}
@@ -164,14 +164,15 @@ func (a *Adapter) searchSources(ctx context.Context, r *resolver, req SearchRequ
 	if len(sources) == 0 {
 		dist, _ := r.distribution()
 		return nil, errs.New(errs.NoSources,
-			fmt.Sprintf("nothing to search: no platform library is cached for Kotlin %s, target %s, the distribution has no stdlib sources, and no --module was given", dist.Version, r.common.target()),
+			fmt.Sprintf("nothing to search: no platform library is cached for Kotlin %s, target %s, the distribution has no stdlib sources, and no --module was given", dist.Version, r.target()),
 			"name the framework to search: ksrc-native search '<pattern>' --module kn.platform:UIKit")
 	}
 	return sources, nil
 }
 
 // describeSources names what was searched, for the no-matches note.
-func describeSources(sources []provider.Source, c Common) string {
+// target is called only when a platform library was searched.
+func describeSources(sources []provider.Source, target func() string) string {
 	const limit = 4
 	names := make([]string, 0, len(sources))
 	platform := false
@@ -184,7 +185,7 @@ func describeSources(sources []provider.Source, c Common) string {
 		text = fmt.Sprintf("%s and %d more modules", strings.Join(names[:limit], ", "), len(names)-limit)
 	}
 	if platform {
-		text += " (" + c.target() + ")"
+		text += " (" + target() + ")"
 	}
 	return text
 }
