@@ -182,3 +182,21 @@ func TestRequireTargetWantsTheExactName(t *testing.T) {
 		}
 	}
 }
+
+// A run that the tool itself stopped is not a failure of klib: the error
+// keeps its own code and does not get the JDK hint.
+func TestDumpMetadataPassesAStoppedRunThrough(t *testing.T) {
+	dist, _ := fakeDistribution(t)
+	klib, err := dist.FindPlatformKlib("ios_arm64", "UIKit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, code := range []string{errs.Timeout, errs.Cancelled} {
+		stop := errs.New(code, "klib was stopped", "run the command again")
+		runner := &testutil.Runner{RunFunc: func(context.Context, executil.Command) error { return stop }}
+		err := dist.DumpMetadata(context.Background(), runner, klib.Path, &bytes.Buffer{})
+		if err != error(stop) {
+			t.Errorf("DumpMetadata() with a run stopped by %s: error = %v, want that error unchanged", code, err)
+		}
+	}
+}

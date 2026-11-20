@@ -99,6 +99,9 @@ func Run(ctx context.Context, runner executil.Runner, opts Options, emit func(Li
 		// rg exits with 1 when nothing matched.
 		return matches, nil
 	default:
+		if errs.Stopped(err) {
+			return matches, err
+		}
 		if err != nil {
 			return matches, errs.Wrap(err, errs.RgFailed, "rg failed: "+rgMessage(err),
 				"check the pattern (a Rust regular expression; pass `-- -F` for a literal string) and the rg arguments after `--`")

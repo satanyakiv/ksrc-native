@@ -106,7 +106,7 @@ func (a *Adapter) depsKonan(r *resolver, out *bufio.Writer, printed *int) error 
 
 // depsApple lists the installed Apple SDKs.
 func (a *Adapter) depsApple(ctx context.Context, out *bufio.Writer, printed *int) error {
-	sdks, err := xcode.List(ctx, a.Runner)
+	sdks, err := xcode.List(ctx, a.runner())
 	if err != nil {
 		return err
 	}

@@ -200,3 +200,29 @@ a session; it picks among the installed ones with `kotlin_version` or
 typed exactly; `deps` with a target the distribution does not have now fails
 where it used to list the SDKs and skip the rest. An SDK outside Xcode cannot
 be named by its path.
+
+## 2026-11-20: Every program has a deadline and dies with its children
+
+**Decision.** `executil.OS` starts each program in a process group of its own.
+When the context ends, the whole group gets `SIGKILL`, and `Run` waits at most
+2 s more for the output pipes. The adapter wraps its runner once
+(`Adapter.runner`) and gives each program a deadline: `klib` 120 s, `rg` 60 s,
+`xcrun` and `xcode-select` 15 s, anything else 60 s. A run stopped by its
+deadline fails with `E_TIMEOUT`. A run stopped by Ctrl-C, `SIGTERM` or a
+cancelled MCP call fails with `E_CANCELLED`. The code that started the program
+passes both on unchanged.
+
+**Why.** `bin/klib` is a shell script that starts `run_konan`, which starts
+`java`, and neither uses `exec`. Go kills only the process it started, so a
+`SIGTERM` during a cold search left two `dump-metadata` processes running and
+the command alive until the dump finished. It then printed `E_KLIB_FAILED`
+with a hint to look for a JDK. Without a deadline a program that hangs (a JVM
+that waits for a lock, `xcrun` on a broken Xcode) blocks an MCP call for as
+long as the client waits.
+
+**Cost.** `SIGKILL` gives the programs no time to clean up. None of them
+writes anything the tool keeps: the dump goes to a pipe, and the cache entry
+is built in a temporary directory that is removed. A program that needs more
+than its deadline on a very slow machine fails; the numbers are constants in
+`internal/adapter/limits.go`. Process groups are a Unix feature. On another
+system only the program itself is killed, and the 2 s wait bounds the rest.

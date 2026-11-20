@@ -141,6 +141,14 @@ func TestRunErrors(t *testing.T) {
 		}
 	})
 
+	t.Run("rg was stopped by the tool", func(t *testing.T) {
+		stop := errs.New(errs.Timeout, "rg did not finish within 1m0s and was stopped", "narrow the search")
+		_, err := Run(ctx, scripted("", stop), Options{Pattern: "x", Roots: roots}, collect(new([]Line)))
+		if err != error(stop) {
+			t.Errorf("error = %v, want the stop error unchanged, not %s", err, errs.RgFailed)
+		}
+	})
+
 	t.Run("no roots means no run", func(t *testing.T) {
 		runner := scripted(rgStream, nil)
 		matches, err := Run(ctx, runner, Options{Pattern: "x"}, collect(new([]Line)))

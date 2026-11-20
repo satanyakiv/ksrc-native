@@ -52,7 +52,7 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 	}
 
 	// ripgrep
-	if rg, err := search.FindRipgrep(a.Runner); err != nil {
+	if rg, err := search.FindRipgrep(a.runner()); err != nil {
 		report("rg", false, err.Error())
 	} else {
 		report("rg", true, fmt.Sprintf("%s (%s)", rg, a.rgVersion(ctx, rg)))
@@ -101,7 +101,7 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 	}
 
 	// Xcode, for sdk.apple
-	if sdk, err := xcode.Find(ctx, a.Runner, req.sdk()); err != nil {
+	if sdk, err := xcode.Find(ctx, a.runner(), req.sdk()); err != nil {
 		optional("xcode", false, err.Error())
 	} else {
 		optional("xcode", true, fmt.Sprintf("SDK %s at %s (%d frameworks with headers)", sdk.Name, sdk.Path, len(sdk.Frameworks())))
@@ -124,7 +124,7 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 
 func (a *Adapter) rgVersion(ctx context.Context, rg string) string {
 	var out bytes.Buffer
-	if err := a.Runner.Run(ctx, executil.Command{Path: rg, Args: []string{"--version"}, Stdout: &out}); err != nil {
+	if err := a.runner().Run(ctx, executil.Command{Path: rg, Args: []string{"--version"}, Stdout: &out}); err != nil {
 		return "version unknown"
 	}
 	first, _, _ := strings.Cut(out.String(), "\n")

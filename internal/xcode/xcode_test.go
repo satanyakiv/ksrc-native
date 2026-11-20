@@ -252,3 +252,18 @@ func TestFindRefusesAPathWithoutRunningXcrun(t *testing.T) {
 		t.Errorf("Find ran xcrun %d times for values that are not names, want 0", len(calls))
 	}
 }
+
+// xcrun or xcode-select that the tool stopped says nothing about Xcode.
+func TestAStoppedRunIsNotAMissingXcode(t *testing.T) {
+	stop := errs.New(errs.Timeout, "the program did not finish within 15s and was stopped", "run it in a terminal")
+	runner := &testutil.Runner{
+		Paths:   map[string]string{"xcrun": "/usr/bin/xcrun", "xcode-select": "/usr/bin/xcode-select"},
+		RunFunc: func(context.Context, executil.Command) error { return stop },
+	}
+	if _, err := Find(context.Background(), runner, "iphoneos"); err != error(stop) {
+		t.Errorf("Find() with a stopped xcrun: error = %v, want the stop error unchanged", err)
+	}
+	if _, err := List(context.Background(), runner); err != error(stop) {
+		t.Errorf("List() with a stopped xcode-select: error = %v, want the stop error unchanged", err)
+	}
+}

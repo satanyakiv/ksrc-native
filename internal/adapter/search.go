@@ -45,7 +45,7 @@ func (a *Adapter) search(ctx context.Context, req SearchRequest) error {
 	if _, err := search.NormalizeExtraArgs(req.RgArgs); err != nil {
 		return err
 	}
-	if _, err := search.FindRipgrep(a.Runner); err != nil {
+	if _, err := search.FindRipgrep(a.runner()); err != nil {
 		return err
 	}
 
@@ -73,7 +73,7 @@ func (a *Adapter) search(ctx context.Context, req SearchRequest) error {
 
 	out := bufio.NewWriter(a.Stdout)
 	printer := &linePrinter{out: out, context: req.Context > 0}
-	matches, err := search.Run(ctx, a.Runner, search.Options{
+	matches, err := search.Run(ctx, a.runner(), search.Options{
 		Pattern:   req.Pattern,
 		Roots:     roots,
 		Context:   req.Context,

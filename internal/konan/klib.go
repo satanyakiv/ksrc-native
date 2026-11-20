@@ -25,6 +25,10 @@ func (d Distribution) DumpMetadata(ctx context.Context, runner executil.Runner, 
 		Args:   []string{"dump-metadata", klibDir},
 		Stdout: w,
 	})
+	if errs.Stopped(err) {
+		// The tool stopped klib itself; that says nothing about klib.
+		return err
+	}
 	if err != nil {
 		return errs.Wrap(err, errs.KlibFailed,
 			fmt.Sprintf("klib dump-metadata failed for %s: %v", klibDir, err),

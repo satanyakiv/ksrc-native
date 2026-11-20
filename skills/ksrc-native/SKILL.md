@@ -151,6 +151,11 @@ Follow the hint.
 - `E_BAD_ARGS` that names an rg argument: the argument after `--` (or in
   `rg_args`) is not on the list above. Drop it; the hint repeats the list.
 - `E_KLIB_FAILED`: the `klib` tool needs a JDK on `PATH`.
+- `E_TIMEOUT`: a program ran past its deadline (`klib` 120 s, `rg` 60 s,
+  `xcrun` 15 s) and was stopped. Run the command once more; for `rg`, narrow
+  the search with `--module`.
+- `E_CANCELLED`: the run was interrupted. Nothing is left half-built; run it
+  again.
 - `E_NO_FILE`, `E_BAD_FILE_ID`: copy the file-id from a fresh search line.
 - `no matches` on stderr with exit code 0: the pattern found nothing. Loosen it
   (drop the package, add `-- -i`) or try another module.

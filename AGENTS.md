@@ -78,7 +78,11 @@ Rules that follow from the map:
 - New behaviour goes into `internal/adapter`. `internal/cli` and
   `internal/mcpserver` only translate inputs and outputs.
 - Programs are run through `executil.Runner`, never through `os/exec`
-  directly, so tests can replace them.
+  directly, so tests can replace them. Inside the adapter the runner is
+  `a.runner()`, never `a.Runner`: it gives every program a deadline
+  (`internal/adapter/limits.go`) and turns a stopped run into `E_TIMEOUT` or
+  `E_CANCELLED`. Code that wraps the error of a run checks `errs.Stopped`
+  first and passes such an error on unchanged.
 - Nothing reads the environment, the home directory or the terminal directly.
   They come from the `Adapter` fields; only `adapter.New` wires those to the
   real ones.

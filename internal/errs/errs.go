@@ -27,6 +27,8 @@ const (
 	DumpFormat = "E_DUMP_FORMAT" // klib output does not look like a metadata dump
 	RgFailed   = "E_RG_FAILED"   // rg exited with an error
 	Cache      = "E_CACHE"       // the cache directory cannot be used
+	Timeout    = "E_TIMEOUT"     // a program the tool started ran past its deadline and was stopped
+	Cancelled  = "E_CANCELLED"   // the run was cancelled while a program was running
 )
 
 // Error is a failure with a stable code and an optional hint.
@@ -71,4 +73,13 @@ func Code(err error) string {
 		return e.Code
 	}
 	return ""
+}
+
+// Stopped reports whether err says that the tool itself stopped a program:
+// the program ran past its deadline, or the run was cancelled. Such an error
+// says nothing about the program, so the code that started it passes the
+// error on unchanged.
+func Stopped(err error) bool {
+	code := Code(err)
+	return code == Timeout || code == Cancelled
 }

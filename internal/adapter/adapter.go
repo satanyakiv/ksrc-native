@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"golang.org/x/term"
 
@@ -24,13 +25,16 @@ const Internal = "E_INTERNAL"
 
 // Adapter holds everything an operation needs from the outside world.
 type Adapter struct {
-	Runner     executil.Runner
+	Runner     executil.Runner     // starts programs; every operation uses it through runner()
 	Stdout     io.Writer           // results
 	Stderr     io.Writer           // diagnostics and progress
 	Stdin      io.Reader           // answers to confirmation prompts
 	Getenv     func(string) string // environment lookup
 	UserHome   string              // the user's home directory
 	IsTerminal func() bool         // whether a person can answer a prompt
+
+	// limit replaces deadlineOf in tests.
+	limit func(program string) time.Duration
 }
 
 // New returns an Adapter wired to the real environment.
@@ -204,7 +208,7 @@ func (r *resolver) platform(target string) (*provider.Platform, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &provider.Platform{Dist: dist, Runner: r.a.Runner, Cache: store, Log: r.a.Stderr}, nil
+	return &provider.Platform{Dist: dist, Runner: r.a.runner(), Cache: store, Log: r.a.Stderr}, nil
 }
 
 func (r *resolver) stdlib() (*provider.Stdlib, error) {
@@ -220,7 +224,7 @@ func (r *resolver) stdlib() (*provider.Stdlib, error) {
 }
 
 func (r *resolver) apple() *provider.AppleSDK {
-	return &provider.AppleSDK{Runner: r.a.Runner}
+	return &provider.AppleSDK{Runner: r.a.runner()}
 }
 
 // provider returns the provider that owns the group of the request's

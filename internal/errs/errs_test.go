@@ -39,3 +39,24 @@ func TestCodeAndUnwrap(t *testing.T) {
 		t.Errorf("Code(plain error) = %q, want empty", got)
 	}
 }
+
+func TestStopped(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"a program past its deadline", New(Timeout, "klib did not finish", ""), true},
+		{"a cancelled run, wrapped", fmt.Errorf("outer: %w", New(Cancelled, "cancelled", "")), true},
+		{"a program that failed", New(KlibFailed, "klib failed", ""), false},
+		{"an error without a code", errors.New("boom"), false},
+		{"no error", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Stopped(tt.err); got != tt.want {
+				t.Errorf("Stopped(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}

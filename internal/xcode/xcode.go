@@ -88,6 +88,9 @@ func Find(ctx context.Context, runner executil.Runner, name string) (SDK, error)
 
 // findError tells an unknown SDK name apart from a missing or broken Xcode.
 func findError(name string, err error) error {
+	if errs.Stopped(err) {
+		return err
+	}
 	var exit *executil.ExitError
 	if errors.As(err, &exit) {
 		stderr := exit.Stderr
@@ -131,6 +134,9 @@ func List(ctx context.Context, runner executil.Runner) ([]SDK, error) {
 	}
 	var out bytes.Buffer
 	if err := runner.Run(ctx, executil.Command{Path: tool, Args: []string{"-p"}, Stdout: &out}); err != nil {
+		if errs.Stopped(err) {
+			return nil, err
+		}
 		return nil, errs.Wrap(err, errs.NoXcode, "xcode-select reports no developer directory: "+oneLine(err.Error()), installHint)
 	}
 	developer := strings.TrimSpace(out.String())

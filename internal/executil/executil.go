@@ -10,6 +10,7 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // Command describes one program run.
@@ -63,17 +64,34 @@ type OS struct{}
 // LookPath implements Runner.
 func (OS) LookPath(name string) (string, error) { return exec.LookPath(name) }
 
+// waitDelay is how long Run waits for the output of a program after its
+// context ended. The whole process group is killed at that moment, so the
+// pipes normally close at once; the delay bounds the wait when a descendant
+// left the group and still holds a pipe.
+const waitDelay = 2 * time.Second
+
 // Run implements Runner.
+//
+// The program runs in a process group of its own. When ctx ends, the whole
+// group is killed, not only the program: <konanHome>/bin/klib is a shell
+// script that starts a second script, which starts java, and neither uses
+// exec. Run then returns an error that wraps ctx.Err().
 func (OS) Run(ctx context.Context, c Command) error {
 	cmd := exec.CommandContext(ctx, c.Path, c.Args...)
 	cmd.Dir = c.Dir
 	cmd.Stdout = c.Stdout
 	stderr := &tailBuffer{max: maxStderr}
 	cmd.Stderr = stderr
+	ownProcessGroup(cmd)
+	cmd.WaitDelay = waitDelay
 
 	err := cmd.Run()
 	if err == nil {
 		return nil
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		// The exit status of a killed program says nothing about it.
+		return fmt.Errorf("run %s: %w", c.Path, ctxErr)
 	}
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {

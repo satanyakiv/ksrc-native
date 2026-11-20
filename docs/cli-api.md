@@ -218,9 +218,28 @@ to stdout.
 | `E_DUMP_FORMAT` | the `klib` output is not a metadata dump the tool understands |
 | `E_RG_FAILED` | ripgrep failed, usually because of a bad pattern or argument |
 | `E_CACHE` | the cache directory cannot be used |
+| `E_TIMEOUT` | a program the tool started ran past its deadline and was stopped |
+| `E_CANCELLED` | the run was interrupted (Ctrl-C, `SIGTERM`, a cancelled MCP call) while a program was running |
 | `E_DOCTOR` | `doctor` found a required part missing |
 | `E_MCP` | the MCP session ended with a protocol error |
 | `E_INTERNAL` | a failure without a code of its own |
+
+### Deadlines and interrupts
+
+The tool starts four programs. Each has a deadline:
+
+| Program | Deadline |
+| --- | --- |
+| `klib` (one dump) | 120 s |
+| `rg` | 60 s |
+| `xcrun`, `xcode-select` | 15 s |
+
+A program that runs longer is stopped, and the command fails with
+`E_TIMEOUT`. Ctrl-C, `SIGTERM` and a cancelled MCP call stop the running
+program at once, and the command fails with `E_CANCELLED`. In both cases the
+tool kills the program together with every process it started (`klib` is a
+shell script that starts a JVM), and a half-built dump is not kept in the
+cache.
 
 ## Environment
 
