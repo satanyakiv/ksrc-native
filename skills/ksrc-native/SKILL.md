@@ -97,6 +97,15 @@ a protocol with `'@protocol UITableViewDelegate'`. Swift-only frameworks
 - `ksrc-native clean`: lists the cache with sizes. It deletes only with `-y`,
   or after a yes typed in a terminal; `--dry-run` never deletes.
 
+## MCP
+
+`ksrc-native mcp` serves the same operations as MCP tools over stdio: `search`,
+`cat` and `deps` by default, `where` with `--tools=all`. A tool takes the
+command's flags as inputs in snake_case (`pattern`, `modules`, `rg_args`,
+`file_id`, `lines`, `target`, `sdk`) and returns what the command prints. A
+failure is a tool result with `isError` and the `E_CODE: message. Try: hint`
+line.
+
 ## Flags
 
 - `--module <coordinate>` (repeatable, short `-m`). For `kn.platform` the name
