@@ -135,8 +135,8 @@ func TestDumpMetadataErrors(t *testing.T) {
 	if errs.Code(err) != errs.KlibFailed {
 		t.Fatalf("error = %v, want %s", err, errs.KlibFailed)
 	}
-	if !strings.Contains(err.Error(), "library not found") || !strings.Contains(err.Error(), "JDK") {
-		t.Errorf("error %q should carry the tool's stderr and the JDK hint", err.Error())
+	if !strings.Contains(err.Error(), "library not found") || !strings.Contains(err.Error(), "ksrc-native doctor") {
+		t.Errorf("error %q should carry the tool's stderr and the doctor hint", err.Error())
 	}
 
 	// A distribution without the tool.

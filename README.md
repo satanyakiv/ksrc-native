@@ -103,6 +103,7 @@ $ ksrc-native doctor
 rg: ok - /opt/homebrew/bin/rg (ripgrep 15.2.0)
 kotlin-native: ok - 2.4.21 at ~/.konan/kotlin-native-prebuilt-macos-aarch64-2.4.21 (also installed: 2.4.20, 2.4.10)
 klib: ok - ~/.konan/kotlin-native-prebuilt-macos-aarch64-2.4.21/bin/klib
+java: ok - /usr/bin/java (openjdk version "17.0.14" 2025-01-21)
 platform: ok - 177 libraries for ios_arm64 (21 targets in the distribution)
 stdlib: ok - ~/.konan/kotlin-native-prebuilt-macos-aarch64-2.4.21/sources/kotlin-stdlib-native-sources.zip (extracted: yes)
 xcode: ok - SDK iphoneos26.4 at /Applications/Xcode-26.4.0.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.4.sdk (195 frameworks with headers)
@@ -408,7 +409,7 @@ ksrc-native: no matches for "NoSuchSymbolAnywhere" in kn.platform:UIKit:2.4.21 (
 - **After a Kotlin or Xcode update.** Nothing to do. A new Kotlin version gets
   new cache entries on first use. Headers are read from the selected Xcode each time.
 - **Free disk space.** `ksrc-native clean -y` deletes the cache. The next search rebuilds what it needs.
-- **Something is off.** `ksrc-native doctor` checks `rg`, the distribution, the `klib` tool, the stdlib sources, Xcode and the cache.
+- **Something is off.** `ksrc-native doctor` checks `rg`, the distribution, the `klib` tool, the JVM that `klib` runs on, the stdlib sources, Xcode and the cache. It runs `java -version` and checks that the cache directory can be written, so `ok` means the part works, not only that a file exists.
 
 For work on the tool itself:
 

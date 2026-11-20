@@ -93,7 +93,8 @@ a protocol with `'@protocol UITableViewDelegate'`. Swift-only frameworks
 - `ksrc-native where <coordinate>`: the klib, zip or Headers directory behind a
   module. It builds nothing.
 - `ksrc-native doctor`: what the tool found (`rg`, the distribution, the `klib`
-  tool, the stdlib sources, Xcode, the cache).
+  tool, the JVM, the stdlib sources, Xcode, the cache). It runs `java -version`
+  and checks that the cache can be written; a `MISSING` line says what to do.
 - `ksrc-native clean`: lists the cache with sizes. It deletes only with `-y`,
   or after a yes typed in a terminal; `--dry-run` never deletes.
 
@@ -155,7 +156,8 @@ Follow the hint.
 - `E_NO_RG`: install ripgrep.
 - `E_BAD_ARGS` that names an rg argument: the argument after `--` (or in
   `rg_args`) is not on the list above. Drop it; the hint repeats the list.
-- `E_KLIB_FAILED`: the `klib` tool needs a JDK on `PATH`.
+- `E_KLIB_FAILED`: the `klib` tool failed. It runs on a JDK: run
+  `ksrc-native doctor` and read the `java` line.
 - `E_TIMEOUT`: a program ran past its deadline (`klib` 120 s, `rg` 60 s,
   `xcrun` 15 s) and was stopped. Run the command once more; for `rg`, narrow
   the search with `--module`.

@@ -24,6 +24,7 @@ func TestEveryProgramHasADeadline(t *testing.T) {
 		{"rg", 60 * time.Second},
 		{"xcrun", 15 * time.Second},
 		{"xcode-select", 15 * time.Second},
+		{"java", 15 * time.Second},
 		{"something-new", 60 * time.Second},
 	}
 	for _, tt := range tests {

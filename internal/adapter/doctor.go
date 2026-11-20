@@ -19,6 +19,8 @@ import (
 // DoctorFailed is the code Doctor returns when a check fails.
 const DoctorFailed = "E_DOCTOR"
 
+const javaHint = "kn.platform needs a JDK to run the klib tool: install one (macOS: brew install openjdk) or point JAVA_HOME at one"
+
 // DoctorRequest is the input of Doctor.
 type DoctorRequest struct {
 	Common
@@ -30,9 +32,14 @@ type DoctorRequest struct {
 //	<name>: MISSING - <what to do>        the tool cannot work
 //	<name>: unavailable - <what to do>    one optional source is off
 //
-// rg, the Kotlin/Native distribution, its klib tool and its platform
-// libraries are required. The stdlib sources and Xcode are optional: without
-// them kn.stdlib and sdk.apple do not work, the rest does.
+// rg, the Kotlin/Native distribution, its klib tool, a java that runs, the
+// platform libraries and a cache that can be written are required. The
+// stdlib sources and Xcode are optional: without them kn.stdlib and
+// sdk.apple do not work, the rest does.
+//
+// A check answers the question the operation will ask. "The file exists" is
+// not enough for java (macOS ships a stub that fails without a JDK) and not
+// enough for the cache (a file can sit where the directory should be).
 func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 	failed := 0
 	report := func(name string, ok bool, detail string) {
@@ -69,6 +76,8 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 	if err != nil {
 		report("kotlin-native", false, err.Error())
 		report("klib", false, "needs a Kotlin/Native distribution")
+		// Only klib runs java; without a distribution nothing needs it.
+		optional("java", false, "needs a Kotlin/Native distribution")
 		report("platform", false, "needs a Kotlin/Native distribution")
 		optional("stdlib", false, "needs a Kotlin/Native distribution")
 	} else {
@@ -83,6 +92,15 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 			report("klib", false, "no klib tool at "+tool+"; delete the distribution and run a Kotlin/Native Gradle task once")
 		} else {
 			report("klib", true, tool)
+		}
+
+		// klib is a shell script that runs a JVM.
+		if java, err := konan.FindJava(a.Getenv, a.runner()); err != nil {
+			report("java", false, err.Error()+"; "+javaHint)
+		} else if version, err := konan.JavaVersion(ctx, a.runner(), java); err != nil {
+			report("java", false, err.Error()+"; "+javaHint)
+		} else {
+			report("java", true, fmt.Sprintf("%s (%s)", java, version))
 		}
 
 		target := req.target()
@@ -110,6 +128,8 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 	// cache
 	if storeErr != nil {
 		report("cache", false, storeErr.Error())
+	} else if err := store.Check(); err != nil {
+		report("cache", false, err.Error())
 	} else {
 		size, _ := store.Size()
 		dumps := len(store.List(provider.PlatformNamespace))

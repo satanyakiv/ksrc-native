@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"syscall"
 	"time"
 
 	"github.com/satanyakiv/ksrc-native/internal/errs"
@@ -257,4 +258,35 @@ func cacheError(err error, path string) error {
 	return errs.Wrap(err, errs.Cache,
 		fmt.Sprintf("cannot write the cache at %s: %v", path, err),
 		"set "+EnvDir+" to a writable directory")
+}
+
+// Check reports whether entries can be written below the root, without
+// creating anything. The root may not exist yet: then the nearest directory
+// above it must be writable. A file anywhere on the way makes the root
+// unusable.
+func (s Store) Check() error {
+	unusable := func(why string) error {
+		return errs.New(errs.Cache,
+			fmt.Sprintf("the cache directory %s cannot be used: %s", s.Root, why),
+			"set "+EnvDir+" to a writable directory")
+	}
+	for path := s.Root; ; path = filepath.Dir(path) {
+		info, err := os.Stat(path)
+		switch {
+		case err == nil && !info.IsDir():
+			return unusable("a file is in the way at " + path)
+		case err == nil:
+			if !writable(path) {
+				return unusable(path + " is not writable")
+			}
+			return nil
+		case errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR):
+			// Nothing here yet, or a file sits higher up: look there.
+		default:
+			return unusable(err.Error())
+		}
+		if filepath.Dir(path) == path {
+			return unusable("no directory above it exists")
+		}
+	}
 }

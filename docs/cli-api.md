@@ -160,14 +160,27 @@ zip, or the `Headers` directory of an SDK framework. It builds nothing.
 
 ### `doctor`
 
-Prints one line per part: `rg`, `kotlin-native`, `klib`, `platform`, `stdlib`,
-`xcode`, `cache`. Each line is `<part>: <status> - <details>`.
+Prints one line per part: `rg`, `kotlin-native`, `klib`, `java`, `platform`,
+`stdlib`, `xcode`, `cache`. Each line is `<part>: <status> - <details>`.
 
 | Status | Meaning |
 | --- | --- |
-| `ok` | found |
-| `MISSING` | a required part is absent; the command exits with 1 and `E_DOCTOR` |
+| `ok` | found and usable |
+| `MISSING` | a required part is absent or does not work; the command exits with 1 and `E_DOCTOR` |
 | `unavailable` | an optional part (`stdlib`, `xcode`) is absent; the exit code stays 0 |
+
+Two lines do more than look for a file:
+
+- `java` finds the program the way the `klib` tool does
+  (`$JAVA_HOME/bin/java` when it is executable, else `java` on `PATH`) and
+  runs `java -version`. On macOS `/usr/bin/java` exists without a JDK and
+  fails when it is run. A java that is absent or fails is `MISSING`:
+  `kn.platform` cannot build a dump without it. Without a Kotlin/Native
+  distribution nothing needs java, and the line is `unavailable`.
+- `cache` checks that the cache directory, or the nearest directory above it
+  when it does not exist yet, can be written. A file in the way and a
+  read-only directory are `MISSING`, with the same `E_CACHE` text a search
+  would fail with. The check creates nothing.
 
 ### `clean [-y] [--dry-run]`
 
@@ -219,7 +232,7 @@ to stdout.
 | `E_BAD_FILE_ID` | a file-id cannot be parsed |
 | `E_BAD_LINES` | the `--lines` range cannot be parsed |
 | `E_BAD_ARGS` | wrong arguments, an unknown flag or command, an rg argument that is not allowed, an `--sdk` value that is not an SDK name |
-| `E_KLIB_FAILED` | the `klib` tool failed, usually because no JDK is on `PATH` |
+| `E_KLIB_FAILED` | the `klib` tool failed, usually because no JDK runs; the message has the exit status and the first 300 bytes of what `klib` printed, on one line; the `java` line of `doctor` shows the state of the JVM |
 | `E_DUMP_FORMAT` | the `klib` output is not a metadata dump the tool understands |
 | `E_RG_FAILED` | ripgrep failed, usually because of a bad pattern or argument |
 | `E_CACHE` | the cache directory cannot be used |
@@ -231,13 +244,14 @@ to stdout.
 
 ### Deadlines and interrupts
 
-The tool starts four programs. Each has a deadline:
+The tool starts five programs. Each has a deadline:
 
 | Program | Deadline |
 | --- | --- |
 | `klib` (one dump) | 120 s |
 | `rg` | 60 s |
 | `xcrun`, `xcode-select` | 15 s |
+| `java -version` (only in `doctor`) | 15 s |
 
 A program that runs longer is stopped, and the command fails with
 `E_TIMEOUT`. Ctrl-C, `SIGTERM` and a cancelled MCP call stop the running

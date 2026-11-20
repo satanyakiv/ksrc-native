@@ -17,8 +17,9 @@ import (
 )
 
 // world is an Adapter over a fake home directory: two fake distributions with
-// the UserNotifications excerpt, a fake Xcode with three SDKs, the real rg
-// and an empty cache. Only rg and the fake klib script run as processes.
+// the UserNotifications excerpt, a fake Xcode with three SDKs, a fake java,
+// the real rg and an empty cache. Only rg and the fake klib script run as
+// processes.
 type world struct {
 	a      *Adapter
 	stdout *bytes.Buffer
@@ -58,6 +59,7 @@ func newWorld(t *testing.T) *world {
 	mac := w.xcode.AddSDK(t, "MacOSX", "26.4")
 	w.xcode.AddVersionedHeader(t, mac, "AppKit", "NSWindow.h", "@interface NSWindow : NSResponder\n@end\n")
 	w.runner = &testutil.Overlay{Base: executil.OS{}, Fakes: w.xcode.Fakes()}
+	w.runner.Fakes["java"] = testutil.FakeJava // no test needs a JDK
 
 	w.env = map[string]string{cache.EnvDir: filepath.Join(t.TempDir(), "cache")}
 	w.a = &Adapter{

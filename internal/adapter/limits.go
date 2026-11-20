@@ -20,6 +20,7 @@ const (
 	klibDeadline    = 120 * time.Second
 	rgDeadline      = 60 * time.Second
 	xcodeDeadline   = 15 * time.Second // xcrun and xcode-select
+	javaDeadline    = 15 * time.Second // java -version, which doctor runs
 	defaultDeadline = 60 * time.Second // a program without a line of its own
 )
 
@@ -32,6 +33,8 @@ func deadlineOf(program string) time.Duration {
 		return rgDeadline
 	case "xcrun", "xcode-select":
 		return xcodeDeadline
+	case "java":
+		return javaDeadline
 	}
 	return defaultDeadline
 }

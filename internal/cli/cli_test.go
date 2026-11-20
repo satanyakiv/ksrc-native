@@ -32,6 +32,15 @@ const viewControllerHeader = `@interface UIViewController : UIResponder
 @end
 `
 
+// withJava adds a fake java to the fake programs, so no test needs a JDK.
+func withJava(fakes map[string]func(context.Context, executil.Command) error) map[string]func(context.Context, executil.Command) error {
+	if fakes == nil {
+		fakes = make(map[string]func(context.Context, executil.Command) error)
+	}
+	fakes["java"] = testutil.FakeJava
+	return fakes
+}
+
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	testutil.RequireRipgrep(t)
@@ -51,7 +60,7 @@ func newHarness(t *testing.T) *harness {
 		t:        t,
 		dist:     dist,
 		xcode:    x,
-		runner:   &testutil.Overlay{Base: executil.OS{}, Fakes: x.Fakes()},
+		runner:   &testutil.Overlay{Base: executil.OS{}, Fakes: withJava(x.Fakes())},
 		cacheDir: filepath.Join(t.TempDir(), "cache"),
 		out:      &bytes.Buffer{},
 		err:      &bytes.Buffer{},

@@ -11,7 +11,7 @@ import (
 )
 
 // DumpMetadata runs `<konanHome>/bin/klib dump-metadata <klibDir>` and writes
-// the dump to w. The tool runs on the JVM, so it needs a JDK on PATH.
+// the dump to w. The tool runs on the JVM, so it needs a JDK; see FindJava.
 func (d Distribution) DumpMetadata(ctx context.Context, runner executil.Runner, klibDir string, w io.Writer) error {
 	tool := d.KlibTool()
 	if _, err := os.Stat(tool); err != nil {
@@ -30,9 +30,17 @@ func (d Distribution) DumpMetadata(ctx context.Context, runner executil.Runner, 
 		return err
 	}
 	if err != nil {
+		status := ""
+		if code := executil.ExitCode(err); code >= 0 {
+			status = fmt.Sprintf(" (exit status %d)", code)
+		}
 		return errs.Wrap(err, errs.KlibFailed,
-			fmt.Sprintf("klib dump-metadata failed for %s: %v", klibDir, err),
-			"check that a JDK is on PATH (the klib tool runs on the JVM) and run `ksrc-native doctor`")
+			fmt.Sprintf("klib dump-metadata failed for %s%s: %s", klibDir, status, executil.Summary(err, klibMessageBytes)),
+			"run `ksrc-native doctor` and read its java line: the klib tool runs on a JDK")
 	}
 	return nil
 }
+
+// klibMessageBytes bounds what klib's own output contributes to an error
+// line. A JVM that fails prints a stack trace of hundreds of lines.
+const klibMessageBytes = 300

@@ -213,7 +213,7 @@ func TestDoctorReportsStdlibAndXcode(t *testing.T) {
 
 	// Xcode and the stdlib sources are optional: doctor still exits with 0.
 	h2 := newHarness(t)
-	h2.runner.Fakes = nil
+	h2.runner.Fakes = withJava(nil)
 	h2.runner.Hidden = []string{"xcrun", "xcode-select"}
 	code, stdout, _ = h2.run("doctor")
 	if code != 0 || !strings.Contains(stdout, "stdlib: unavailable - ") || !strings.Contains(stdout, "xcode: unavailable - E_NO_XCODE: ") {

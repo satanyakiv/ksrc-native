@@ -200,3 +200,56 @@ func TestListAndSize(t *testing.T) {
 		t.Errorf("Size() = %d, want at least the 30 bytes of source files", size)
 	}
 }
+
+func TestCheck(t *testing.T) {
+	base := t.TempDir()
+	file := filepath.Join(base, "a-file")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	readOnly := filepath.Join(base, "read-only")
+	existing := filepath.Join(base, "existing")
+	for _, dir := range []string{readOnly, existing} {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Chmod(readOnly, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(readOnly, 0o755) })
+
+	tests := []struct {
+		name string
+		root string
+		want string // part of the message; empty means usable
+		// The check looks at permissions, which root does not have.
+		needsUser bool
+	}{
+		{"an existing directory", existing, "", false},
+		{"a directory that does not exist yet", filepath.Join(base, "new", "deeper"), "", false},
+		{"a file", file, "a file is in the way at " + file, false},
+		{"below a file", filepath.Join(file, "cache"), "a file is in the way at " + file, false},
+		{"a read-only directory", readOnly, readOnly + " is not writable", true},
+		{"below a read-only directory", filepath.Join(readOnly, "sub", "cache"), readOnly + " is not writable", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.needsUser && os.Geteuid() == 0 {
+				t.Skip("root can write everywhere")
+			}
+			err := Store{Root: tt.root}.Check()
+			if tt.want == "" {
+				if err != nil {
+					t.Errorf("Check() error = %v, want nil", err)
+				}
+			} else if errs.Code(err) != errs.Cache || !strings.Contains(err.Error(), tt.want) || !strings.Contains(err.Error(), EnvDir) {
+				t.Errorf("Check() error = %v, want %s with %q and a hint that names %s", err, errs.Cache, tt.want, EnvDir)
+			}
+		})
+	}
+	// The check creates nothing.
+	if _, err := os.Stat(filepath.Join(base, "new")); !os.IsNotExist(err) {
+		t.Errorf("Check() created %s (stat error = %v), want it to create nothing", filepath.Join(base, "new"), err)
+	}
+}

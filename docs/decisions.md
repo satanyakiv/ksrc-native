@@ -247,3 +247,25 @@ model. The person who starts the server knows the model and can raise it.
 **Cost.** A result that was cut no longer says how long the full output would
 have been: the search stops before it knows. The note gives the kept size and
 the limit instead.
+
+## 2026-11-20: `doctor` says ok only for what it tried
+
+**Decision.** `doctor` has a `java` line. It finds java the way
+`bin/run_konan` does (`$JAVA_HOME/bin/java` when executable, else `java` on
+`PATH`) and runs `java -version` with a 15 s deadline. The `cache` line asks
+the system whether the cache directory, or the nearest existing directory
+above it, can be written. A klib failure is one line: the exit status and the
+first 300 bytes of what klib printed.
+
+**Why.** `doctor` printed `klib: ok` after it found the file `bin/klib`, and
+never looked for a JVM. On a Mac without a JDK `/usr/bin/java` exists and
+fails. `doctor` printed `cache: ok` for a cache path that was a regular file
+and for one below a read-only directory, while every search failed with
+`E_CACHE`. The klib error carried up to 16 KiB of a Java stack trace and sent
+the user to a `doctor` that could not see the cause.
+
+**Cost.** `doctor` starts a JVM, which takes about half a second. The java
+check repeats the rule of a script the tool does not own; if `run_konan`
+changes how it picks java, `doctor` and klib can disagree. The cache check
+uses `access(2)` on macOS and Linux only; on another system the line stays
+`ok` until the first write fails.

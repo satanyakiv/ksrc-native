@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Command describes one program run.
@@ -19,6 +20,9 @@ type Command struct {
 	Args   []string  // arguments, without the program name
 	Dir    string    // working directory; empty means the current one
 	Stdout io.Writer // receives stdout; nil discards it
+	// Stderr receives stderr too; an *ExitError carries its tail either way.
+	// It must not be the writer of Stdout: each stream has its own goroutine.
+	Stderr io.Writer
 }
 
 // Runner starts external programs.
@@ -55,6 +59,34 @@ func ExitCode(err error) int {
 	return -1
 }
 
+// Summary describes a failed run in one line for an error message: what the
+// program printed to stderr, or the error text when it printed nothing, with
+// all white space folded into single spaces. A text longer than max bytes is
+// cut there, between two characters, and ends with "...". A JVM prints a
+// stack trace of hundreds of lines; an error line has room for its start.
+func Summary(err error, max int) string {
+	if err == nil {
+		return ""
+	}
+	text := ""
+	var exit *ExitError
+	if errors.As(err, &exit) {
+		text = exit.Stderr
+	}
+	if strings.TrimSpace(text) == "" {
+		text = err.Error()
+	}
+	text = strings.Join(strings.Fields(text), " ")
+	if len(text) <= max {
+		return text
+	}
+	cut := max
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut] + "..."
+}
+
 // maxStderr bounds how much stderr is kept for error messages.
 const maxStderr = 16 << 10
 
@@ -82,6 +114,9 @@ func (OS) Run(ctx context.Context, c Command) error {
 	cmd.Stdout = c.Stdout
 	stderr := &tailBuffer{max: maxStderr}
 	cmd.Stderr = stderr
+	if c.Stderr != nil {
+		cmd.Stderr = io.MultiWriter(stderr, c.Stderr)
+	}
 	ownProcessGroup(cmd)
 	cmd.WaitDelay = waitDelay
 

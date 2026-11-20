@@ -347,8 +347,21 @@ or the Headers directory of an SDK framework. It builds nothing.`,
 func newDoctor(a *adapter.Adapter, flags *common) *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
-		Short: "Check rg, the Kotlin/Native distribution, Xcode and the cache",
-		Args:  cobra.NoArgs,
+		Short: "Check rg, the Kotlin/Native distribution, java, Xcode and the cache",
+		Long: `Doctor prints one line per part the tool needs:
+
+  rg, kotlin-native, klib, java, platform, stdlib, xcode, cache
+
+A line is "<part>: ok - <details>", "<part>: MISSING - <what to do>" for a
+part the tool cannot work without, or "<part>: unavailable - <what to do>"
+for an optional one. With a MISSING line the command exits with 1.
+
+The java line runs "java -version" with the java the klib tool will use:
+$JAVA_HOME/bin/java when it is executable, else java on PATH. The cache line
+checks that the cache directory can be written, and creates nothing.`,
+		Example: `  ksrc-native doctor
+  ksrc-native doctor --target macos_arm64 --sdk macosx`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return a.Doctor(cmd.Context(), adapter.DoctorRequest{Common: flags.request()})
 		},

@@ -9,6 +9,7 @@ import (
 
 	"github.com/satanyakiv/ksrc-native/internal/cache"
 	"github.com/satanyakiv/ksrc-native/internal/errs"
+	"github.com/satanyakiv/ksrc-native/internal/executil"
 	"github.com/satanyakiv/ksrc-native/internal/provider"
 	"github.com/satanyakiv/ksrc-native/internal/testutil"
 )
@@ -594,7 +595,7 @@ func TestDoctorWithStdlibAndOptionalParts(t *testing.T) {
 	}
 
 	// Missing optional parts do not fail doctor.
-	w.runner.Fakes = nil
+	w.runner.Fakes = map[string]func(context.Context, executil.Command) error{"java": testutil.FakeJava}
 	w.runner.Hidden = []string{"xcrun", "xcode-select"}
 	w.reset()
 	if err := w.a.Doctor(ctx, DoctorRequest{}); err != nil {
