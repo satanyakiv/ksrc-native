@@ -51,7 +51,7 @@ func (a *Adapter) clean(req CleanRequest) error {
 		fmt.Fprintf(a.Stdout, "the cache is empty: %s\n", store.Root)
 		return nil
 	}
-	fmt.Fprintf(a.Stdout, "total: %d entries, %s in %s\n", entries, humanSize(total), store.Root)
+	fmt.Fprintf(a.Stdout, "total: %s, %s in %s\n", counted(entries, "entry", "entries"), humanSize(total), store.Root)
 
 	switch {
 	case req.DryRun:
@@ -60,7 +60,7 @@ func (a *Adapter) clean(req CleanRequest) error {
 	case req.Yes:
 		// Proceed.
 	case a.IsTerminal != nil && a.IsTerminal():
-		fmt.Fprintf(a.Stdout, "Delete %d entries (%s)? [y/N] ", entries, humanSize(total))
+		fmt.Fprintf(a.Stdout, "Delete %s (%s)? [y/N] ", counted(entries, "entry", "entries"), humanSize(total))
 		if !confirmed(a) {
 			fmt.Fprintln(a.Stdout, "nothing deleted")
 			return nil
@@ -73,7 +73,7 @@ func (a *Adapter) clean(req CleanRequest) error {
 	if err := store.Remove(cacheNamespaces...); err != nil {
 		return err
 	}
-	fmt.Fprintf(a.Stdout, "deleted %d entries, %s freed\n", entries, humanSize(total))
+	fmt.Fprintf(a.Stdout, "deleted %s, %s freed\n", counted(entries, "entry", "entries"), humanSize(total))
 	return nil
 }
 
@@ -88,4 +88,12 @@ func confirmed(a *Adapter) bool {
 		return true
 	}
 	return false
+}
+
+// counted writes a number with its noun, in the singular for one.
+func counted(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
 }

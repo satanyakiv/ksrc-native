@@ -87,3 +87,13 @@ func TestJavaVersion(t *testing.T) {
 		t.Errorf("JavaVersion() with a silent java = %q, %v; want %q", version, err, "version unknown")
 	}
 }
+
+// Other readers of the environment in this package (DataDir, Discover) take
+// a nil function as "no variables"; FindJava must not be the one that panics.
+func TestFindJavaWithoutAnEnvironment(t *testing.T) {
+	onPath := &testutil.Runner{Paths: map[string]string{"java": "/usr/bin/java"}}
+	got, err := FindJava(nil, onPath)
+	if err != nil || got != "/usr/bin/java" {
+		t.Errorf("FindJava(nil, java on PATH) = %q, %v; want /usr/bin/java", got, err)
+	}
+}

@@ -395,7 +395,7 @@ func TestDoctor(t *testing.T) {
 	if err := w.a.Doctor(ctx, DoctorRequest{}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(w.stdout.String(), "(1 platform dumps, ") {
+	if !strings.Contains(w.stdout.String(), "(1 platform dump, ") {
 		t.Errorf("doctor output does not count the cached dump:\n%s", w.stdout.String())
 	}
 }

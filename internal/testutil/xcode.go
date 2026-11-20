@@ -155,6 +155,35 @@ func (x *Xcode) xcodeSelect(_ context.Context, cmd executil.Command) error {
 	return err
 }
 
+// InstallPrograms writes xcrun and xcode-select into dir as shell scripts
+// that answer like the fakes of Fakes. A test that runs the built binary puts
+// dir first on PATH: the binary starts real programs, so a fake in memory
+// cannot stand in for them.
+func (x *Xcode) InstallPrograms(tb testing.TB, dir string) {
+	tb.Helper()
+	var cases strings.Builder
+	names := make([]string, 0, len(x.sdks))
+	for name := range x.sdks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		fmt.Fprintf(&cases, "  %s) echo '%s' ;;\n", name, x.sdks[name])
+	}
+	xcrun := "#!/bin/bash\n" +
+		"if [ \"$#\" -ne 3 ] || [ \"$1\" != \"--sdk\" ] || [ \"$3\" != \"--show-sdk-path\" ]; then\n" +
+		"  echo \"fake xcrun: unsupported arguments: $*\" >&2\n  exit 64\nfi\n" +
+		"case \"$2\" in\n" + cases.String() +
+		"  *) echo \"xcodebuild: error: SDK \\\"$2\\\" cannot be located.\" >&2; exit 1 ;;\n" +
+		"esac\n"
+	xcodeSelect := "#!/bin/bash\n" +
+		"if [ \"$#\" -ne 1 ] || [ \"$1\" != \"-p\" ]; then\n" +
+		"  echo \"fake xcode-select: unsupported arguments\" >&2\n  exit 64\nfi\n" +
+		"echo '" + x.Developer + "'\n"
+	WriteFile(tb, filepath.Join(dir, "xcrun"), []byte(xcrun), 0o755)
+	WriteFile(tb, filepath.Join(dir, "xcode-select"), []byte(xcodeSelect), 0o755)
+}
+
 // StdlibUtils is a small stand-in for nativeMain/kotlinx/cinterop/Utils.kt.
 const StdlibUtils = `package kotlinx.cinterop
 

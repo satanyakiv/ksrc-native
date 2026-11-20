@@ -19,7 +19,11 @@ const javaMessageBytes = 300
 // executable, else java on PATH.
 func FindJava(getenv func(string) string, runner executil.Runner) (string, error) {
 	inHome := ""
-	if home := getenv("JAVA_HOME"); home != "" {
+	home := ""
+	if getenv != nil {
+		home = getenv("JAVA_HOME")
+	}
+	if home != "" {
 		inHome = filepath.Join(home, "bin", "java")
 		if info, err := os.Stat(inHome); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
 			return inHome, nil

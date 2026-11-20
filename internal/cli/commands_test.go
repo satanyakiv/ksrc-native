@@ -189,7 +189,7 @@ func TestCleanCommand(t *testing.T) {
 	if code, _, stderr := h.run("search", "x", "--module", unModule); code != 0 {
 		t.Fatalf("search: code = %d, stderr = %q", code, stderr)
 	}
-	if code, stdout, _ := h.run("clean", "-y"); code != 0 || !strings.Contains(stdout, "deleted 1 entries, ") || entries() != 0 {
+	if code, stdout, _ := h.run("clean", "-y"); code != 0 || !strings.Contains(stdout, "deleted 1 entry, ") || entries() != 0 {
 		t.Errorf("clean -y: code = %d, stdout = %q, %d entries", code, stdout, entries())
 	}
 	if _, err := os.Stat(h.cacheDir); err != nil {

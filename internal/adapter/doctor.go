@@ -133,7 +133,7 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 	} else {
 		size, _ := store.Size()
 		dumps := len(store.List(provider.PlatformNamespace))
-		report("cache", true, fmt.Sprintf("%s (%d platform dumps, %s)", store.Root, dumps, humanSize(size)))
+		report("cache", true, fmt.Sprintf("%s (%s, %s)", store.Root, counted(dumps, "platform dump", "platform dumps"), humanSize(size)))
 	}
 
 	if failed > 0 {

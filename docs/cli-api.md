@@ -194,6 +194,10 @@ Lists the cache entries with their sizes, then deletes them.
 | `--dry-run` | nothing is deleted, even with `-y` |
 | `-y` / `--yes` | deleted without a question |
 | a terminal, no `-y` | asks `Delete N entries (size)? [y/N]`; `y` or `yes` deletes |
+
+A count of one is written in the singular: `total: 1 entry`, `Delete 1 entry
+(size)?`, `deleted 1 entry`, and `1 platform dump` in the `cache` line of
+`doctor`.
 | no terminal, no `-y` | nothing is deleted; the output says so |
 
 Only the tool's own cache directories are removed. Other files in the cache
