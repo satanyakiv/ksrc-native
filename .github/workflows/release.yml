@@ -1,8 +1,11 @@
 name: release
 
-# Run by hand from the Actions tab. It tags the commit with the version in
-# the VERSION file, builds the archives and opens a draft release. A person
-# reviews the draft and publishes it.
+# Run by hand from the Actions tab, on main. It runs the tests, tags the
+# commit with the version in the VERSION file, builds the archives and opens
+# a draft release. A person reviews the draft and publishes it.
+#
+# The actions are pinned to commits; the comment names the version. A tag of
+# an action can be moved to other code, a commit cannot.
 on:
   workflow_dispatch:
 
@@ -17,11 +20,19 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # A release is cut from main only. The run fails with a message; a job
+      # that is skipped by an `if` would look like a release that worked.
+      - name: Refuse a branch other than main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::the release workflow runs on main only; this run was started on $GITHUB_REF"
+          exit 1
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
 
@@ -39,8 +50,14 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Check that the manifests name the same version
-        run: go test -count=1 -run 'TestManifests' ./cmd/ksrc-native
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      # The whole suite, before anything is tagged. It includes the check
+      # that the manifests name the version of the VERSION file. CI=true on
+      # a runner makes a missing rg a failure instead of a skip.
+      - name: Test
+        run: go test -count=1 ./...
 
       - name: Build the archives
         run: scripts/package.sh dist

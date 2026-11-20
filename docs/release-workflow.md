@@ -36,9 +36,12 @@ differs.
    README examples again and paste the real output.
 4. Commit as `chore(release): <version>` and merge to `main`. Wait for the
    `ci` workflow to pass.
-5. On GitHub, open Actions, pick `release`, and run it on `main`.
-6. The workflow reads `VERSION`, stops if the tag exists, builds the archives,
-   pushes the tag `v<version>` and opens a draft release with generated notes.
+5. On GitHub, open Actions, pick `release`, and run it on `main`. A run on
+   another branch fails in its first step with a message and tags nothing.
+6. The workflow reads `VERSION`, stops if the tag exists, installs ripgrep,
+   runs `go test -count=1 ./...`, builds the archives, pushes the tag
+   `v<version>` and opens a draft release with generated notes. The tag is
+   pushed only after the tests and the build passed.
 7. Read the draft. Edit the notes. Publish it.
 8. Check an install from the release:
 
@@ -70,6 +73,26 @@ KSRC_NATIVE_BASE_URL="file:///tmp/ksrc-native-dist" \
 KSRC_NATIVE_PREFIX=/tmp/ksrc-native-prefix \
   sh scripts/install.sh
 ```
+
+## What guards a release
+
+- **Only `main`.** The first step of the workflow fails when the run was
+  started on another branch. It is a failing step, not a skipped job: a
+  skipped job looks like a release that worked.
+- **The whole test suite before the tag.** The workflow used to run only the
+  manifest test. It now runs every test, with ripgrep installed. `CI` is set
+  on a runner, so a missing `rg` fails the tests instead of skipping them.
+- **Pinned actions.** Both workflows name `actions/checkout` and
+  `actions/setup-go` by commit, with the version in a comment
+  (`v4.4.0` and `v5.6.0`, resolved on 2026-11-20). A tag of an action can be
+  moved to other code; a commit cannot. To update one, look up the commit of
+  the new tag and change the hash and the comment together.
+- **An installer that cannot run half of itself.** `scripts/install.sh` is
+  meant for `curl ... | sh`. Its body is the function `main`, called on the
+  last line. When the download stops halfway the shell has an unfinished
+  function and no call, so it runs nothing. The test
+  `TestInstallScriptCutShortRunsNothing` cuts the script after every line
+  and checks that.
 
 ## If something goes wrong
 
