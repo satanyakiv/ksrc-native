@@ -68,7 +68,9 @@ func Discover(o DiscoverOptions) (Distribution, error) {
 				return d, nil
 			}
 			if len(installed) > 0 && o.Warn != nil {
-				fmt.Fprintf(o.Warn, "warning: the project uses Kotlin %s, but its Kotlin/Native distribution is not in %s; using %s\n",
+				// Like every note of the tool, so a reader of stderr can tell
+				// it from the output of another program.
+				fmt.Fprintf(o.Warn, "ksrc-native: the project uses Kotlin %s, but its Kotlin/Native distribution is not in %s; using %s\n",
 					v, dataDir, installed[0].Version)
 			}
 		}

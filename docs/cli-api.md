@@ -36,7 +36,8 @@ The distribution is picked in this order: `--konan-home`; the `KONAN_HOME`
 variable; `--kotlin-version` or the version in a `kn.*` coordinate;
 `kotlin = "..."` in `gradle/libs.versions.toml` of `--project`; the newest
 distribution under `KONAN_DATA_DIR` or `~/.konan`. When the project's version
-is not installed, a warning goes to stderr and the newest one is used.
+is not installed, the newest one is used and a note on stderr says so:
+`ksrc-native: the project uses Kotlin <version>, but ...; using <version>`.
 
 An SDK named in an `sdk.apple` coordinate wins over `--sdk`.
 

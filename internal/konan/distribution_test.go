@@ -110,6 +110,10 @@ func TestDiscoverFallsBackWhenTheProjectVersionIsNotInstalled(t *testing.T) {
 	if !strings.Contains(warn.String(), "2.6.0") || !strings.Contains(warn.String(), "using 2.4.21") {
 		t.Errorf("warning = %q, want it to name both versions", warn.String())
 	}
+	// Like every note of the tool on stderr.
+	if !strings.HasPrefix(warn.String(), "ksrc-native: the project uses Kotlin 2.6.0") || strings.Count(warn.String(), "\n") != 1 {
+		t.Errorf("warning = %q, want one line that starts with %q", warn.String(), "ksrc-native: ")
+	}
 }
 
 func TestDiscoverErrors(t *testing.T) {
