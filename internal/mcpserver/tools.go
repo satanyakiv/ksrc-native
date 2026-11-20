@@ -57,7 +57,7 @@ type SearchInput struct {
 // CatInput is the input of the cat tool.
 type CatInput struct {
 	FileID      string `json:"file_id" jsonschema:"file-id from a search hit, for example kn.platform:UIKit:2.4.21!/ios_arm64/UIApplication.kt"`
-	Lines       string `json:"lines,omitempty" jsonschema:"line range A,B (1-based, inclusive), for example 1,60; default: the whole file"`
+	Lines       string `json:"lines,omitempty" jsonschema:"line range A,B (1-based, inclusive), for example 1,60; 'A,' runs to the end of the file and 'A' is one line; an end past the last line is cut to it; default: the whole file"`
 	LineNumbers bool   `json:"line_numbers,omitempty" jsonschema:"prefix every line with its number"`
 	CommonInput
 }

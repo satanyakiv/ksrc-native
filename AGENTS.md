@@ -27,6 +27,7 @@ go vet ./...
 go test -count=1 ./...           # all tests
 go test -short ./...             # without the tests that build the binary or run the real klib tool
 go test -race ./internal/mcpserver ./internal/cli ./internal/adapter
+GOOS=linux GOARCH=amd64 go vet ./...   # the code has files per system; a Mac does not compile them otherwise
 scripts/package.sh dist          # release archives and checksums.txt
 scripts/notices.sh               # write THIRD_PARTY_NOTICES again; --check fails when it is stale
 shellcheck scripts/*.sh
@@ -43,14 +44,24 @@ Run `gofmt`, `go vet` and `go test` before every commit.
 - Tests need no Kotlin/Native distribution, no JDK and no Xcode.
   `internal/testutil` builds a fake distribution whose `klib` tool is the bash
   script `testdata/fake-klib/klib`, and a fake Xcode with fake `xcrun` and
-  `xcode-select`. Only `rg` and that script run as processes.
+  `xcode-select`. Only `rg` and that script run as processes, except in the
+  tests of `cmd/ksrc-native` below.
+- A test is a Linux machine when it sets `GOOS` and `GOARCH` of the adapter
+  and builds the distribution with `testutil.NewDistributionFor`
+  (`internal/adapter/linux_test.go`).
 - `testdata/dumps/usernotifications.txt` is a real excerpt of a metadata dump.
   `testdata/golden/usernotifications/` is what the splitter must produce from
   it. Change the golden files only when the output format changes on purpose.
 - `TestRealDistribution` in `internal/cli` runs against `~/.konan` and the
   real Xcode. It skips itself without them and with `-short`.
 - `cmd/ksrc-native` has tests that build the binary: exit codes of every kind
-  of failure, and an MCP session over stdio.
+  of failure, an MCP session over stdio, signals, and file-ids that point
+  outside a source root. The binary starts real programs, so these tests put
+  `xcrun` and `xcode-select` on `PATH` as scripts
+  (`testutil.Xcode.InstallPrograms`). The same package tests the scripts:
+  `build.sh` stamps the version, `install.sh` cut short runs nothing,
+  `package.sh` fills the archive, `notices.sh --check` passes. They need
+  `bash`, `sh` and `tar`, and skip with `-short`.
 - A new command or flag gets a test in `internal/adapter` (behaviour) and one
   in `internal/cli` (the command line). A new error path gets a case that
   checks the code, the hint and the exit code.
@@ -64,7 +75,7 @@ Run `gofmt`, `go vet` and `go test` before every commit.
 | `internal/adapter` | the operations: `Search`, `Cat`, `Deps`, `Where`, `Doctor`, `Clean`. The command line and the MCP server both call it |
 | `internal/mcpserver` | MCP tools over the adapter; input structs, result text, the cap of one result (64 KiB, `--max-result-bytes`) |
 | `internal/provider` | coordinates and the three providers (`Platform`, `Stdlib`, `AppleSDK`) |
-| `internal/konan` | finds Kotlin/Native distributions, their platform klibs and the `klib` tool |
+| `internal/konan` | finds Kotlin/Native distributions, their platform klibs, the `klib` tool and the java it runs on; picks the target when none is given |
 | `internal/xcode` | finds Xcode SDKs and framework headers through `xcrun` and `xcode-select` |
 | `internal/dump` | splits a klib metadata dump into one file per class |
 | `internal/search` | runs `rg --json` and formats the output lines |
@@ -84,9 +95,9 @@ Rules that follow from the map:
   (`internal/adapter/limits.go`) and turns a stopped run into `E_TIMEOUT` or
   `E_CANCELLED`. Code that wraps the error of a run checks `errs.Stopped`
   first and passes such an error on unchanged.
-- Nothing reads the environment, the home directory or the terminal directly.
-  They come from the `Adapter` fields; only `adapter.New` wires those to the
-  real ones.
+- Nothing reads the environment, the home directory, the terminal or the
+  system (`runtime.GOOS`) directly. They come from the `Adapter` fields; only
+  `adapter.New` wires those to the real ones.
 - A value from the `--` tail of the command line or from an MCP input is
   untrusted: a model fills it, and text in a repository can steer the model.
   It never reaches a program as an argument and never becomes part of a path

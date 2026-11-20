@@ -111,7 +111,7 @@ java: ok - /usr/bin/java (openjdk version "17.0.14" 2025-01-21)
 platform: ok - 177 libraries for ios_arm64 (21 targets in the distribution)
 stdlib: ok - ~/.konan/kotlin-native-prebuilt-macos-aarch64-2.4.21/sources/kotlin-stdlib-native-sources.zip (extracted: yes)
 xcode: ok - SDK iphoneos26.4 at /Applications/Xcode-26.4.0.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.4.sdk (195 frameworks with headers)
-cache: ok - ~/Library/Caches/ksrc-native (6 platform dumps, 14.2 MB)
+cache: ok - ~/Library/Caches/ksrc-native (7 platform dumps, 14.3 MB)
 ```
 
 ## 1. Install the tool
@@ -187,8 +187,9 @@ ksrc-native: ksrc-native mcp - ✔ Connected
 
 For Codex: `codex mcp add ksrc-native -- ksrc-native mcp`.
 
-The server offers `search`, `cat` and `deps`. `ksrc-native mcp --tools=all`
-adds `where`. A tool takes the flags of its command as inputs in snake_case
+The server offers `search`, `cat` and `deps`. `--tools` replaces that list:
+`ksrc-native mcp --tools=search,cat,deps,where` or `--tools=all` serves
+`where` as well, and `--tools=where` serves `where` alone. A tool takes the flags of its command as inputs in snake_case
 (`pattern`, `modules`, `file_id`, `lines`, `kotlin_version`, `target`, `sdk`)
 and returns what the command prints. [docs/cli-api.md](docs/cli-api.md) lists
 every input.
@@ -242,6 +243,13 @@ public open class platform/UIKit/UIApplication : platform/UIKit/UIResponder {
 ```
 
 Quote a file-id: it contains `!`. A pattern is a ripgrep regular expression.
+It cannot be empty, and on the command line it cannot start with `-`: write
+`'[-]foo'` in place of `'-foo'`.
+
+`cat --lines A,B` prints the lines from `A` to `B`, counted from 1. `A,` runs
+to the end of the file and `A` alone is one line. `A-B` and `A:B` mean the
+same as `A,B`. An end past the last line is cut to the last line.
+
 Arguments after `--` go to ripgrep. Only a fixed list passes: `-i`, `-F`,
 `-w`, `-g <glob>`, `--max-count <n>` and a few more. A path or any other flag
 fails with `E_BAD_ARGS`. The full list is in [docs/cli-api.md](docs/cli-api.md).
@@ -275,6 +283,12 @@ More patterns:
 | a protocol (Kotlin adds `Protocol`) | `'interface platform/WebKit/WKNavigationDelegateProtocol '` | `WKNavigationDelegateProtocol.kt` |
 | a method by Objective-C selector | `'selector = "openURL:options:completionHandler:"'` | the line above the `fun` |
 | class (static) methods | `'fun sharedApplication'` | `UIApplicationMeta.kt` |
+
+A few classes live in a library with another name than their package. In
+Kotlin 2.4.21 `platform.CoreLocation.CLLocation` is in
+`kn.platform:_LocationEssentials`, not in `kn.platform:CoreLocation`. When a
+class is not in the framework its package names, look at the libraries whose
+name starts with `_` in `ksrc-native deps`, or search with `--all-platform`.
 
 The first search of a framework builds its dump. On an Apple silicon Mac that
 took 0.3 s for CoreLocation and about 5 s for UIKit. Later searches read the
@@ -317,8 +331,9 @@ sdk.apple:UIKit:iphoneos26.4!/UIViewController.h 262:9:- (void)presentViewContro
 
 `--sdk` picks the SDK. The default is `iphoneos`. Other values are
 `iphonesimulator`, `macosx`, or a full name from `ksrc-native deps` such as
-`iphoneos26.4`. It takes a name, not a path. Headers are searched in place; nothing is cached. A Swift-only
-framework (SwiftData, Charts) has no headers and no `platform.*` library.
+`iphoneos26.4`. It takes a name, not a path. Headers are searched in place;
+nothing is cached. A Swift-only framework (SwiftData, Charts) has no headers
+and no `platform.*` library.
 
 ### Without `--module`
 
@@ -388,7 +403,7 @@ kn.platform:Foundation:2.4.21 (ios_arm64) 2.6 MB
 kn.platform:UIKit:2.4.21 (ios_arm64) 5.9 MB
 ...
 kn.stdlib:native:2.4.21 4.9 MB
-total: 7 entries, 14.2 MB in ~/Library/Caches/ksrc-native
+total: 8 entries, 14.3 MB in ~/Library/Caches/ksrc-native
 dry run: nothing deleted
 ```
 
@@ -405,6 +420,11 @@ E_NO_SOURCES: no platform library "UIKitt" for target ios_arm64 in Kotlin/Native
 $ ksrc-native search 'NoSuchSymbolAnywhere' --module kn.platform:UIKit
 ksrc-native: no matches for "NoSuchSymbolAnywhere" in kn.platform:UIKit:2.4.21 (ios_arm64)
 ```
+
+Ctrl-C stops a running command together with the `klib` process and the JVM
+it started, and the command ends with `E_CANCELLED`. A program that runs past
+its deadline (120 s for one dump) is stopped the same way, with `E_TIMEOUT`.
+Nothing half built stays in the cache.
 
 [docs/cli-api.md](docs/cli-api.md) has every command, flag and error code.
 

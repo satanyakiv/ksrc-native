@@ -17,6 +17,11 @@ Framework names are matched without regard to case. Output always carries the
 real name and the resolved version: `kn.platform:uikit` prints as
 `kn.platform:UIKit:2.4.21`.
 
+The name of a `kn.platform` module is the name of a platform library of the
+distribution. It is usually the package after `platform.`, but not always: in
+Kotlin 2.4.21 the class `platform.CoreLocation.CLLocation` is in the library
+`_LocationEssentials`. `ksrc-native deps` lists every library.
+
 All `kn.*` modules of one command must name the same Kotlin version. The
 version part of an `sdk.apple` coordinate is an SDK name, so it may differ.
 
@@ -106,6 +111,15 @@ an unknown flag, a flag that changes the output (`-l`, `-c`, `--files`,
 `--no-ignore`, `-z`, a path, a second `--`, a flag without its value. Use
 `--context` of ksrc-native in place of rg's `-C`.
 
+The pattern is a ripgrep regular expression. Two rules apply to it:
+
+- A pattern that is empty or only white space fails with `E_BAD_ARGS`.
+- On the command line a pattern cannot start with `-`: the argument would be
+  read as a flag, and `ksrc-native search -foo` fails with `E_BAD_ARGS`. It
+  cannot go after `--` either, because that place belongs to the rg
+  arguments. Write `'[-]foo'` or `'\-foo'`. The `pattern` input of the MCP
+  tool has no such limit.
+
 The pattern is passed to ripgrep as a pattern whatever it looks like. The
 user's ripgrep configuration file is not read.
 
@@ -132,8 +146,23 @@ Alias: `open`. Prints the file a file-id names.
 
 | Flag | Meaning |
 | --- | --- |
-| `--lines A,B` | line range, 1-based and inclusive; `A` alone prints one line; default: the whole file |
+| `--lines A,B` | line range, 1-based and inclusive; default: the whole file |
 | `--line-numbers`, `-n` | prefix every line with its number and a tab |
+
+Forms of a line range:
+
+| Value | Lines printed |
+| --- | --- |
+| `A,B` | from `A` to `B` |
+| `A,` | from `A` to the end of the file |
+| `A` | the line `A` alone |
+| `A-B`, `A:B` | the same as `A,B`; `A-` and `A:` are the same as `A,` |
+
+`A` is 1 or more and `B` is not below `A`. An end past the last line is cut
+to the last line, so `--lines 700,99999` prints to the end. A start past the
+last line fails with `E_BAD_LINES`, and the message gives the number of lines
+of the file. So does a value that is not a range, such as `0,5`, `5,2` or
+`1,2,3`.
 
 A file-id is `group:name:version!/inner/path`:
 
@@ -212,11 +241,11 @@ Lists the cache entries with their sizes, then deletes them.
 | `--dry-run` | nothing is deleted, even with `-y` |
 | `-y` / `--yes` | deleted without a question |
 | a terminal, no `-y` | asks `Delete N entries (size)? [y/N]`; `y` or `yes` deletes |
+| no terminal, no `-y` | nothing is deleted; the output says so |
 
 A count of one is written in the singular: `total: 1 entry`, `Delete 1 entry
 (size)?`, `deleted 1 entry`, and `1 platform dump` in the `cache` line of
 `doctor`.
-| no terminal, no `-y` | nothing is deleted; the output says so |
 
 Only the tool's own cache directories are removed. Other files in the cache
 root stay.
@@ -227,7 +256,7 @@ Runs an MCP server on stdin and stdout. See [MCP tools](#mcp-tools).
 
 | Flag | Meaning |
 | --- | --- |
-| `--tools` | tools to serve: a comma-separated list of `search`, `cat`, `deps`, `where`, or `all`; default `search,cat,deps` |
+| `--tools` | the tools to serve, and no others: a comma-separated list of `search`, `cat`, `deps`, `where`, or `all`; default `search,cat,deps` |
 | `--max-result-bytes` | largest text of one tool result in bytes; default 65536, minimum 4096; a smaller value or one that is not a number fails with `E_BAD_ARGS` |
 
 ## Exit codes and errors
@@ -251,12 +280,12 @@ to stdout.
 | `E_NO_KONAN` | no usable Kotlin/Native distribution |
 | `E_NO_SOURCES` | unknown framework, target, stdlib module or SDK; a Swift-only framework; nothing to search |
 | `E_NO_RG` | `rg` is not on `PATH` |
-| `E_NO_XCODE` | `xcrun` or the developer tools are missing |
+| `E_NO_XCODE` | `xcrun` or the developer tools are missing; on Linux every `sdk.apple` module ends here |
 | `E_NO_FILE` | the file-id points at a file that does not exist |
 | `E_BAD_COORD` | a coordinate cannot be parsed, has an unknown group, or versions disagree |
 | `E_BAD_FILE_ID` | a file-id cannot be parsed |
-| `E_BAD_LINES` | the `--lines` range cannot be parsed |
-| `E_BAD_ARGS` | wrong arguments, an unknown flag or command, an rg argument that is not allowed, an `--sdk` value that is not an SDK name |
+| `E_BAD_LINES` | the `--lines` range cannot be parsed, or it starts past the end of the file |
+| `E_BAD_ARGS` | wrong arguments, an unknown flag or command, an empty pattern, an rg argument that is not allowed, an `--sdk` value that is not an SDK name, an unknown MCP tool, a `--max-result-bytes` below 4096 |
 | `E_KLIB_FAILED` | the `klib` tool failed, usually because no JDK runs; the message has the exit status and the first 300 bytes of what `klib` printed, on one line; the `java` line of `doctor` shows the state of the JVM |
 | `E_DUMP_FORMAT` | the `klib` output is not a metadata dump the tool understands: it has no `library fragment` block, or a block does not end where expected; nothing is cached |
 | `E_RG_FAILED` | ripgrep failed, usually because of a bad pattern or argument |
@@ -325,8 +354,11 @@ count such an entry.
 
 ## MCP tools
 
-`ksrc-native mcp` serves `search`, `cat` and `deps`. `--tools=where` or
-`--tools=all` adds `where`. `tools/list` returns the tools sorted by name.
+`ksrc-native mcp` serves `search`, `cat` and `deps`. `--tools` replaces that
+list; it does not add to it. `--tools=where` serves `where` alone. To serve
+`where` next to the default tools, name all four,
+`--tools=search,cat,deps,where`, or write `--tools=all`. A name that is not a
+tool fails with `E_BAD_ARGS`. `tools/list` returns the tools sorted by name.
 
 The global flags given to `ksrc-native mcp` are the defaults of every call.
 An input of a call wins over them.

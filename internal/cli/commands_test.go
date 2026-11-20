@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -422,5 +423,69 @@ func TestTargetIsPickedWhenTheFlagIsNotGiven(t *testing.T) {
 	_, help, _ := h.run("--help")
 	if !strings.Contains(help, "--target") || !strings.Contains(help, "default: ios_arm64, or the host target") {
 		t.Errorf("--help does not say how the target is picked:\n%s", help)
+	}
+}
+
+// docs/cli-api.md lists these forms of --lines. The parser has its own
+// tests; this one pins what the command prints for each.
+func TestCatLineRangeForms(t *testing.T) {
+	h := newHarness(t)
+	if code, _, stderr := h.run("search", "x", "--module", unModule); code != 0 {
+		t.Fatalf("search: code = %d, stderr = %q", code, stderr)
+	}
+	_, whole, _ := h.run("cat", unFileID)
+	lines := strings.SplitAfter(whole, "\n")
+	lines = lines[:len(lines)-1]
+	if len(lines) < 6 {
+		t.Fatalf("the fixture file has %d lines, the test needs 6", len(lines))
+	}
+	last := fmt.Sprint(len(lines))
+
+	tests := []struct {
+		value string
+		want  string
+	}{
+		{"2,4", strings.Join(lines[1:4], "")},
+		{"2-4", strings.Join(lines[1:4], "")},
+		{"2:4", strings.Join(lines[1:4], "")},
+		{"3", lines[2]},
+		{"5,", strings.Join(lines[4:], "")},
+		{"5-", strings.Join(lines[4:], "")},
+		{"5:", strings.Join(lines[4:], "")},
+		{"5,99999", strings.Join(lines[4:], "")},
+		{last + "," + last, lines[len(lines)-1]},
+	}
+	for _, tt := range tests {
+		if code, stdout, stderr := h.run("cat", unFileID, "--lines", tt.value); code != 0 || stdout != tt.want {
+			t.Errorf("cat --lines %s: code = %d, stderr = %q, stdout = %q\nwant %q", tt.value, code, stderr, stdout, tt.want)
+		}
+	}
+	for _, value := range []string{"0,5", "5,2", "1,2,3", ",5", "a", "99999", "99999,"} {
+		if code, stdout, stderr := h.run("cat", unFileID, "--lines", value); code != 1 || stdout != "" || !strings.HasPrefix(stderr, "E_BAD_LINES: ") {
+			t.Errorf("cat --lines %s: code = %d, stdout = %q, stderr = %q; want E_BAD_LINES", value, code, stdout, stderr)
+		}
+	}
+}
+
+// The two rules of a pattern that docs/cli-api.md gives.
+func TestSearchPatternRules(t *testing.T) {
+	h := newHarness(t)
+	for name, pattern := range map[string]string{"empty": "", "only white space": " \t "} {
+		if code, stdout, stderr := h.run("search", pattern, "--module", unModule); code != 1 || stdout != "" || !strings.HasPrefix(stderr, "E_BAD_ARGS: the search pattern is empty") {
+			t.Errorf("search with a pattern that is %s: code = %d, stdout = %q, stderr = %q; want E_BAD_ARGS", name, code, stdout, stderr)
+		}
+	}
+	if code, _, stderr := h.run("search", "-foo", "--module", unModule); code != 1 || !strings.HasPrefix(stderr, "E_BAD_ARGS: ") {
+		t.Errorf("search -foo: code = %d, stderr = %q; want E_BAD_ARGS, a pattern cannot start with a dash", code, stderr)
+	}
+	if code, _, stderr := h.run("search", "--module", unModule, "--", "-foo"); code != 1 || !strings.HasPrefix(stderr, "E_BAD_ARGS: ") {
+		t.Errorf("search -- -foo: code = %d, stderr = %q; want E_BAD_ARGS, the place after -- belongs to rg", code, stderr)
+	}
+	// The two spellings the doc offers reach ripgrep as a pattern.
+	for _, pattern := range []string{"[-]>", `\->`} {
+		code, _, stderr := h.run("search", pattern, "--module", unModule)
+		if code != 0 || strings.Contains(stderr, "E_") {
+			t.Errorf("search %q: code = %d, stderr = %q; want a search that ran", pattern, code, stderr)
+		}
 	}
 }

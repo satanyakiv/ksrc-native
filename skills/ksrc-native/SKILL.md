@@ -62,7 +62,8 @@ cached, plus the stdlib. It never builds all frameworks unasked;
 
 ## How to write patterns
 
-Patterns are ripgrep regular expressions.
+Patterns are ripgrep regular expressions. A pattern cannot be empty. On the
+command line it cannot start with `-`: write `'[-]foo'` in place of `'-foo'`.
 
 **Platform dumps.** Names are fully qualified with slashes:
 `platform/UIKit/UIView`, `kotlin/String`, `kotlinx/cinterop/CPointer`.
@@ -78,6 +79,12 @@ Patterns are ripgrep regular expressions.
 
 Limit a search to one class with an rg glob: `-- -g UIApplication.kt`.
 A companion object and nested classes live in the file of their outer class.
+
+A few classes live in a library with another name than their package. In
+Kotlin 2.4.21 `platform/CoreLocation/CLLocation` is in
+`kn.platform:_LocationEssentials`, not in `kn.platform:CoreLocation`. When a
+class is not in the framework its package names, look at the libraries whose
+name starts with `_` in `ksrc-native deps`, or search with `--all-platform`.
 
 **Stdlib.** Ordinary Kotlin sources: `'fun <R> memScoped'`, `'class Arena'`.
 Native-only code is under `nativeMain/`, shared code under `commonMain/`.
@@ -101,7 +108,8 @@ a protocol with `'@protocol UITableViewDelegate'`. Swift-only frameworks
 ## MCP
 
 `ksrc-native mcp` serves the same operations as MCP tools over stdio: `search`,
-`cat` and `deps` by default, `where` with `--tools=all`. A tool takes the
+`cat` and `deps` by default. `--tools` replaces that list:
+`--tools=search,cat,deps,where` or `--tools=all` serves `where` too. A tool takes the
 command's flags as inputs in snake_case (`pattern`, `modules`, `rg_args`,
 `file_id`, `lines`, `target`, `sdk`) and returns what the command prints. A
 failure is a tool result with `isError` and the `E_CODE: message. Try: hint`
@@ -134,7 +142,9 @@ pattern, name one module, or read a file with `cat` and `lines`.
   `-m/--max-count <n>`, `-A/--after-context <n>`, `-B/--before-context <n>`,
   `--max-columns <n>`. A path or any other flag is `E_BAD_ARGS`. For context
   lines use `--context N` before the `--`.
-- `cat --lines A,B` (1-based, inclusive), `cat -n` for line numbers.
+- `cat --lines A,B` (1-based, inclusive); `A,` runs to the end of the file
+  and `A` is one line; an end past the last line is cut to it. `cat -n`
+  prints line numbers.
 - Kotlin version: read from `gradle/libs.versions.toml` of `--project`
   (default: the current directory). Override with `--kotlin-version` or
   `--konan-home`.
@@ -150,7 +160,7 @@ Follow the hint.
   Gradle task once (for example `./gradlew compileKotlinIosArm64`), or pass
   `--konan-home`. `sdk.apple` modules work without one.
 - `E_NO_XCODE`: `xcrun` found no developer tools. Only `sdk.apple` modules need
-  Xcode.
+  Xcode, and they exist on macOS only.
 - `E_NO_SOURCES`: unknown framework, target or SDK, a Swift-only framework, or
   a search without `--module` when nothing is available. Check the name in the
   hint, or run `ksrc-native deps`.

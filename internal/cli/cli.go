@@ -164,8 +164,9 @@ func newMCP(a *adapter.Adapter, flags *common) *cobra.Command {
 instead of running a shell. A tool takes the inputs of the command of the
 same name and returns what the command prints.
 
-Tools: search, cat and deps by default; where when named in --tools or with
---tools=all. The global flags given here (--project, --target, --sdk,
+Tools: search, cat and deps by default. --tools replaces that list: it serves
+the tools it names and no others, so --tools=where serves where alone. Add
+where with --tools=search,cat,deps,where or --tools=all. The global flags given here (--project, --target, --sdk,
 --kotlin-version) are the defaults of every tool call; a call may override
 them. --konan-home is not an input of a call: it is set here or in the
 KONAN_HOME variable, because the server runs the klib program found in it.
@@ -174,6 +175,7 @@ The text of one tool result is at most 65536 bytes, or the number given with
 --max-result-bytes (4096 or more). Longer output is cut at the end of a line,
 the last line says so, and a search stops at that point.`,
 		Example: `  ksrc-native mcp
+  ksrc-native mcp --tools=search,cat,deps,where
   ksrc-native mcp --tools=all --project /path/to/project
   ksrc-native --konan-home ~/.konan/kotlin-native-prebuilt-macos-aarch64-2.4.21 mcp
   ksrc-native mcp --max-result-bytes 16384
@@ -198,7 +200,7 @@ the last line says so, and a search stops at that point.`,
 			}, mcpserver.StdioTransport(a.Stdin, a.Stdout))
 		},
 	}
-	cmd.Flags().StringVar(&tools, "tools", "", "tools to serve: a comma-separated `list`, or all (default: search,cat,deps)")
+	cmd.Flags().StringVar(&tools, "tools", "", "the tools to serve, and no others: a comma-separated `list`, or all (default: search,cat,deps)")
 	cmd.Flags().IntVar(&maxResultBytes, "max-result-bytes", mcpserver.DefaultMaxResultBytes, "largest text of one tool result, in `bytes` (4096 or more)")
 	return cmd
 }
@@ -228,6 +230,9 @@ library of the target; that takes minutes the first time.
 
 Names in a platform dump are fully qualified with slashes:
 platform/UIKit/UIView, kotlin/String.
+
+A pattern cannot be empty, and on the command line it cannot start with
+"-": write '[-]foo' in place of '-foo'.
 
 Arguments after "--" go to rg. Only these are allowed:
   -i -s -S -F -w -x -v -U -P --multiline-dotall
@@ -309,7 +314,7 @@ func newCat(a *adapter.Adapter, flags *common) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&lines, "lines", "", "line range A,B (1-based, inclusive); default: the whole file")
+	cmd.Flags().StringVar(&lines, "lines", "", "line range A,B (1-based, inclusive); A, runs to the end, A is one line; default: the whole file")
 	cmd.Flags().BoolVarP(&numbers, "line-numbers", "n", false, "prefix every line with its number")
 	return cmd
 }
