@@ -352,3 +352,46 @@ func TestSearchRgArgumentsFromTheCommandLine(t *testing.T) {
 		})
 	}
 }
+
+// --target and --sdk are checked before a provider runs: a target must be
+// the exact name of a target of the distribution, an SDK must be a name.
+func TestTargetAndSDKFromTheCommandLine(t *testing.T) {
+	h := newHarness(t)
+	sdkDir := t.TempDir()
+	tests := []struct {
+		name   string
+		args   []string
+		prefix string
+		part   string
+	}{
+		{"target with a path", []string{"search", "x", "--module", unModule, "--target", "../platform/ios_arm64"}, "E_NO_SOURCES: ", "pass --target with one of: ios_arm64"},
+		{"target in another case", []string{"where", unModule, "--target", "IOS_ARM64"}, "E_NO_SOURCES: ", `target "IOS_ARM64"`},
+		{"target in another case, search", []string{"search", "x", "--module", unModule, "--target", "IOS_ARM64"}, "E_NO_SOURCES: ", `target "IOS_ARM64"`},
+		{"target for all platform libraries", []string{"search", "x", "--all-platform", "--target", "./ios_arm64"}, "E_NO_SOURCES: ", "pass --target with one of: ios_arm64"},
+		{"target of deps", []string{"deps", "--target", "ios_arm64/"}, "E_NO_SOURCES: ", "pass --target with one of: ios_arm64"},
+		{"target segment of a file-id", []string{"cat", "kn.platform:UserNotifications:2.4.21!/IOS_ARM64/UNNotification.kt"}, "E_NO_SOURCES: ", `target "IOS_ARM64"`},
+		{"SDK that is a directory", []string{"search", "x", "--module", "sdk.apple:UIKit", "--sdk", sdkDir}, "E_BAD_ARGS: ", "--sdk"},
+		{"SDK that is /tmp", []string{"where", "sdk.apple:UIKit", "--sdk", "/tmp"}, "E_BAD_ARGS: ", `"/tmp" is not an Apple SDK name`},
+		{"SDK that looks like a flag", []string{"where", "sdk.apple:UIKit", "--sdk=--show-sdk-version"}, "E_BAD_ARGS: ", "is not an Apple SDK name"},
+		{"SDK in a coordinate", []string{"where", "sdk.apple:UIKit:-iphoneos"}, "E_BAD_COORD: ", "is not an Apple SDK name"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			code, stdout, stderr := h.run(tt.args...)
+			last := lastLine(stderr)
+			if code != 1 || stdout != "" || !strings.HasPrefix(last, tt.prefix) || !strings.Contains(last, tt.part) || !strings.Contains(last, " Try: ") {
+				t.Errorf("code = %d, stdout = %q, last stderr line = %q; want 1, nothing, %q with %q and a hint", code, stdout, last, tt.prefix, tt.part)
+			}
+		})
+	}
+	if calls := h.dist.KlibCalls(t); len(calls) != 0 {
+		t.Errorf("the refused commands built %d dumps, want 0", len(calls))
+	}
+
+	// Nothing was written to the cache, so the next search builds a clean
+	// entry and finds the class.
+	code, stdout, stderr := h.run("search", "class platform/UserNotifications/UNNotification ", "--module", unModule)
+	if code != 0 || !strings.HasPrefix(stdout, unFileID+" 2:13:") {
+		t.Errorf("search after the refused targets: code = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+}

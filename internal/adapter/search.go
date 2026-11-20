@@ -108,11 +108,12 @@ func (a *Adapter) searchSources(ctx context.Context, r *resolver, req SearchRequ
 	}
 
 	for _, c := range coords {
-		p, err := r.provider(c)
+		request := r.request(c)
+		p, err := r.provider(request)
 		if err != nil {
 			return nil, err
 		}
-		src, err := p.Resolve(ctx, r.request(c))
+		src, err := p.Resolve(ctx, request)
 		if err != nil {
 			return nil, err
 		}
@@ -120,11 +121,8 @@ func (a *Adapter) searchSources(ctx context.Context, r *resolver, req SearchRequ
 	}
 
 	if req.AllPlatform {
-		platform, err := r.platform()
+		platform, err := r.platform(r.common.target())
 		if err != nil {
-			return nil, err
-		}
-		if err := platform.Dist.RequireTarget(r.common.target()); err != nil {
 			return nil, err
 		}
 		for _, name := range platform.Dist.Frameworks(r.common.target()) {
@@ -141,7 +139,7 @@ func (a *Adapter) searchSources(ctx context.Context, r *resolver, req SearchRequ
 	}
 
 	if len(coords) == 0 {
-		platform, err := r.platform()
+		platform, err := r.platform(r.common.target())
 		if err != nil {
 			return nil, err
 		}

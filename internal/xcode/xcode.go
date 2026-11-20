@@ -27,6 +27,35 @@ type SDK struct {
 	Path    string // the .sdk directory
 }
 
+// sdkHint names the SDKs people usually mean.
+const sdkHint = "use iphoneos, iphonesimulator, macosx, or a full name from `ksrc-native deps` such as iphoneos26.4"
+
+// ValidSDKName reports whether name has the form of an SDK name: a letter
+// followed by letters, digits and dots, as in iphoneos or macosx26.4.
+//
+// xcrun also accepts a directory path after --sdk and answers with that
+// path, so a name that is not checked would let a caller point the tool at
+// any directory. A leading dash would be read by xcrun as a flag.
+func ValidSDKName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		letter := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+		if !letter && (i == 0 || !((c >= '0' && c <= '9') || c == '.')) {
+			return false
+		}
+	}
+	return true
+}
+
+// BadSDKName is the error for a value that is not an SDK name. what names
+// where the value came from, for example "--sdk".
+func BadSDKName(code, what, name string) error {
+	return errs.New(code, fmt.Sprintf("%s %q is not an Apple SDK name", what, name), sdkHint)
+}
+
 const installHint = "install Xcode, then select it with `sudo xcode-select -s /Applications/Xcode.app`; `ksrc-native doctor` shows what is found"
 
 // Find resolves an SDK name such as iphoneos, iphonesimulator, macosx or
@@ -34,6 +63,11 @@ const installHint = "install Xcode, then select it with `sudo xcode-select -s /A
 func Find(ctx context.Context, runner executil.Runner, name string) (SDK, error) {
 	if name == "" {
 		name = DefaultSDK
+	}
+	// The adapter checks the name first and knows where it came from; this
+	// check is for every other caller.
+	if !ValidSDKName(name) {
+		return SDK{}, BadSDKName(errs.BadArgs, "the SDK", name)
 	}
 	xcrun, err := runner.LookPath("xcrun")
 	if err != nil {

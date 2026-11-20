@@ -42,7 +42,8 @@ func (a *Adapter) cat(ctx context.Context, req CatRequest) error {
 	request := r.request(id.Coordinate)
 	if id.Coordinate.Group == provider.PlatformGroup {
 		// The first segment of a platform file-id is the target, so the
-		// file-id alone decides it and --target is not consulted.
+		// file-id alone decides it and --target is not consulted. The
+		// segment is as untrusted as --target; r.provider checks it.
 		target, _, ok := strings.Cut(id.Inner, "/")
 		if !ok {
 			return errs.New(errs.BadFileID,
@@ -52,7 +53,7 @@ func (a *Adapter) cat(ctx context.Context, req CatRequest) error {
 		request.Target = target
 	}
 
-	p, err := r.provider(id.Coordinate)
+	p, err := r.provider(request)
 	if err != nil {
 		return err
 	}

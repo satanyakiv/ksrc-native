@@ -110,13 +110,25 @@ type resolver struct {
 	storeErr error
 }
 
-// newResolver validates the groups of the coordinates and settles the one
-// Kotlin version they and --kotlin-version may name.
+// newResolver validates the groups of the coordinates and the SDK names, and
+// settles the one Kotlin version the coordinates and --kotlin-version may
+// name.
+//
+// --sdk, --target and the versions in coordinates may come from an MCP input
+// that a model filled in, so they are untrusted. An SDK name is checked here,
+// before any provider exists, because xcrun would take a path in its place.
+// The target needs the distribution to be checked against; see platform.
 func (a *Adapter) newResolver(c Common, coords ...provider.Coordinate) (*resolver, error) {
+	if c.SDK != "" && !xcode.ValidSDKName(c.SDK) {
+		return nil, xcode.BadSDKName(errs.BadArgs, "--sdk", c.SDK)
+	}
 	version := ""
 	for _, coord := range coords {
 		if err := knownGroup(coord); err != nil {
 			return nil, err
+		}
+		if coord.Group == provider.AppleGroup && coord.Version != "" && !xcode.ValidSDKName(coord.Version) {
+			return nil, xcode.BadSDKName(errs.BadCoord, "the SDK part of "+coord.String(), coord.Version)
 		}
 		if !usesKonan(coord.Group) || coord.Version == "" {
 			continue
@@ -176,9 +188,16 @@ func (r *resolver) cache() (cache.Store, error) {
 	return *r.store, nil
 }
 
-func (r *resolver) platform() (*provider.Platform, error) {
+// platform returns the provider of platform libraries for one target. It is
+// the only way to get that provider, and it refuses a target that is not the
+// exact name of a target of the distribution: the target becomes a directory
+// name inside a cache entry and a segment of every file-id.
+func (r *resolver) platform(target string) (*provider.Platform, error) {
 	dist, err := r.distribution()
 	if err != nil {
+		return nil, err
+	}
+	if err := dist.RequireTarget(target); err != nil {
 		return nil, err
 	}
 	store, err := r.cache()
@@ -204,17 +223,18 @@ func (r *resolver) apple() *provider.AppleSDK {
 	return &provider.AppleSDK{Runner: r.a.Runner}
 }
 
-// provider returns the provider that owns the group of a coordinate.
-func (r *resolver) provider(c provider.Coordinate) (provider.Provider, error) {
-	switch c.Group {
+// provider returns the provider that owns the group of the request's
+// coordinate, after checking the request's target when the group uses one.
+func (r *resolver) provider(req provider.Request) (provider.Provider, error) {
+	switch req.Coordinate.Group {
 	case provider.PlatformGroup:
-		return r.platform()
+		return r.platform(req.Target)
 	case provider.StdlibGroup:
 		return r.stdlib()
 	case provider.AppleGroup:
 		return r.apple(), nil
 	}
-	return nil, knownGroup(c)
+	return nil, knownGroup(req.Coordinate)
 }
 
 func (r *resolver) request(c provider.Coordinate) provider.Request {

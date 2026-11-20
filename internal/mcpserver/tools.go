@@ -22,8 +22,8 @@ import (
 type CommonInput struct {
 	KotlinVersion string `json:"kotlin_version,omitempty" jsonschema:"Kotlin version of the distribution to use, for example 2.4.21; default: read from gradle/libs.versions.toml of the project, else the newest installed"`
 	Project       string `json:"project,omitempty" jsonschema:"project directory whose gradle/libs.versions.toml names the Kotlin version; default: the directory the server runs in"`
-	Target        string `json:"target,omitempty" jsonschema:"Kotlin/Native target of kn.platform modules; default: ios_arm64"`
-	SDK           string `json:"sdk,omitempty" jsonschema:"Apple SDK of sdk.apple modules: iphoneos, iphonesimulator, macosx, or a full name such as iphoneos26.4; default: iphoneos"`
+	Target        string `json:"target,omitempty" jsonschema:"Kotlin/Native target of kn.platform modules, as an exact lower-case name such as ios_arm64 or ios_simulator_arm64; default: ios_arm64"`
+	SDK           string `json:"sdk,omitempty" jsonschema:"Apple SDK of sdk.apple modules: iphoneos, iphonesimulator, macosx, or a full name such as iphoneos26.4, never a path; default: iphoneos"`
 }
 
 // common merges the input with the defaults of the server.

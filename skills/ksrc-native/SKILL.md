@@ -113,10 +113,12 @@ with `kotlin_version` or `project`.
 - `--module <coordinate>` (repeatable, short `-m`). For `kn.platform` the name
   is what follows `import platform.`.
 - `--target <target>`: default `ios_arm64`; use `ios_simulator_arm64`,
-  `macos_arm64` and so on when the platform API differs per target.
+  `macos_arm64` and so on when the platform API differs per target. Write the
+  name exactly, in lower case; a wrong one is `E_NO_SOURCES` with the list.
 - `--sdk <sdk>`: Apple SDK of `sdk.apple` modules; default `iphoneos`. Also
   `iphonesimulator`, `macosx`, or a full name from `deps` such as
-  `iphoneos26.4`. An SDK in the coordinate wins over the flag.
+  `iphoneos26.4`. An SDK in the coordinate wins over the flag. It is a name,
+  never a path.
 - `--context N` (short `-C`): lines around each match. Context lines print as
   `<file-id> <line>-<text>`.
 - `-- <rg-args>`: extra ripgrep arguments, for example `-- -i`, `-- -F`,

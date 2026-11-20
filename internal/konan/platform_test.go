@@ -152,3 +152,33 @@ func TestDumpMetadataErrors(t *testing.T) {
 		t.Error("the runner was called although the tool is missing")
 	}
 }
+
+// A target is compared as a string with the names in klib/platform. A value
+// that only reaches the same directory through the file system is refused.
+func TestRequireTargetWantsTheExactName(t *testing.T) {
+	dist, fake := fakeDistribution(t)
+	// A directory without libraries is not a target.
+	if err := os.MkdirAll(filepath.Join(fake.Home, "klib", "platform", "tvos_arm64"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, target := range []string{"ios_arm64", "macos_arm64"} {
+		if err := dist.RequireTarget(target); err != nil {
+			t.Errorf("RequireTarget(%q) error = %v, want nil", target, err)
+		}
+	}
+	for _, target := range []string{
+		"", "tvos_arm64", "watchos_arm64",
+		"IOS_ARM64", "Ios_Arm64",
+		"../platform/ios_arm64", "ios_arm64/", "./ios_arm64", "ios_arm64/../macos_arm64", "ios_arm64/.",
+		" ios_arm64", "ios_arm64 ",
+	} {
+		err := dist.RequireTarget(target)
+		if errs.Code(err) != errs.NoSources || !strings.Contains(err.Error(), "pass --target with one of: ios_arm64, macos_arm64") {
+			t.Errorf("RequireTarget(%q) error = %v, want %s with the target list", target, err, errs.NoSources)
+		}
+		if _, err := dist.FindPlatformKlib(target, "UIKit"); errs.Code(err) != errs.NoSources {
+			t.Errorf("FindPlatformKlib(%q, UIKit) error = %v, want %s", target, err, errs.NoSources)
+		}
+	}
+}

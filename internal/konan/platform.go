@@ -28,11 +28,18 @@ func (d Distribution) Frameworks(target string) []string {
 	return dirNames(filepath.Join(d.Home, "klib", "platform", target), platformKlibPrefix)
 }
 
-// RequireTarget reports an error when the distribution has no platform
-// libraries for the target.
+// RequireTarget reports an error unless target is the exact name of a
+// directory in klib/platform that holds platform libraries.
+//
+// The name is compared with the directory listing, not handed to the file
+// system: "../platform/ios_arm64" and, on a file system that ignores case,
+// "IOS_ARM64" open the same directory as "ios_arm64", but they are different
+// strings in a cache key, in a file-id and in the path a dump is written to.
 func (d Distribution) RequireTarget(target string) error {
-	if len(d.Frameworks(target)) > 0 {
-		return nil
+	for _, name := range d.Targets() {
+		if name == target && len(d.Frameworks(name)) > 0 {
+			return nil
+		}
 	}
 	return errs.New(errs.NoSources,
 		fmt.Sprintf("Kotlin/Native %s has no platform libraries for target %q", d.Version, target),

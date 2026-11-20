@@ -29,11 +29,12 @@ func (a *Adapter) where(ctx context.Context, req WhereRequest) error {
 	if err != nil {
 		return err
 	}
-	p, err := r.provider(coord)
+	request := r.request(coord)
+	p, err := r.provider(request)
 	if err != nil {
 		return err
 	}
-	loc, err := p.Locate(ctx, r.request(coord))
+	loc, err := p.Locate(ctx, request)
 	if err != nil {
 		return err
 	}

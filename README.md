@@ -222,6 +222,9 @@ cache and take about 0.01 s.
 
 `--target` picks the Kotlin/Native target. The default is `ios_arm64`. Use
 `ios_simulator_arm64`, `macos_arm64` and so on when an API differs per target.
+The value must be the exact name of a target of the distribution;
+`ksrc-native doctor` shows how many there are, and the error for a wrong one
+lists them.
 
 ### Native stdlib: `kn.stdlib`
 
@@ -253,7 +256,7 @@ sdk.apple:UIKit:iphoneos26.4!/UIViewController.h 262:9:- (void)presentViewContro
 
 `--sdk` picks the SDK. The default is `iphoneos`. Other values are
 `iphonesimulator`, `macosx`, or a full name from `ksrc-native deps` such as
-`iphoneos26.4`. Headers are searched in place; nothing is cached. A Swift-only
+`iphoneos26.4`. It takes a name, not a path. Headers are searched in place; nothing is cached. A Swift-only
 framework (SwiftData, Charts) has no headers and no `platform.*` library.
 
 ### Without `--module`

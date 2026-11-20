@@ -86,7 +86,7 @@ func (a *Adapter) Doctor(ctx context.Context, req DoctorRequest) error {
 		}
 
 		target := req.target()
-		if frameworks := dist.Frameworks(target); len(frameworks) == 0 {
+		if frameworks := dist.Frameworks(target); dist.RequireTarget(target) != nil {
 			report("platform", false, fmt.Sprintf("no platform libraries for target %s; available targets: %s", target, strings.Join(dist.Targets(), ", ")))
 		} else {
 			report("platform", true, fmt.Sprintf("%d libraries for %s (%d targets in the distribution)", len(frameworks), target, len(dist.Targets())))

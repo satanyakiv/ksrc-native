@@ -40,6 +40,18 @@ is not installed, a warning goes to stderr and the newest one is used.
 
 An SDK named in an `sdk.apple` coordinate wins over `--sdk`.
 
+`--target` and `--sdk` are checked before anything is read or built:
+
+- A target must be the exact name of a target of the distribution, as
+  `ksrc-native doctor` lists them: `ios_arm64`, not `IOS_ARM64` and not a path
+  such as `../platform/ios_arm64`. Anything else fails with `E_NO_SOURCES`
+  and a hint that lists the targets. The target segment of a `kn.platform`
+  file-id is checked the same way.
+- An SDK must be a name: a letter followed by letters, digits and dots, for
+  example `iphoneos`, `macosx` or `iphoneos26.4`. A path fails with
+  `E_BAD_ARGS` (`E_BAD_COORD` when it is the SDK part of a coordinate), and
+  `xcrun` is not run.
+
 ## Commands
 
 ### `search <pattern> [--module <coordinate>]... [-- <rg-args>]`
@@ -121,7 +133,8 @@ sdk.apple:UIKit:iphoneos26.4!/UIViewController.h
 ```
 
 For `kn.platform` the first path segment is the target, so `--target` is not
-needed. `cat` builds a missing dump the same way `search` does.
+needed. The segment must be the exact name of a target, like `--target`.
+`cat` builds a missing dump the same way `search` does.
 
 ### `deps`
 
@@ -136,8 +149,9 @@ sdk.apple:<Framework>:<sdk> (<n> frameworks with headers, <sdk path>)
 The `sdk.apple` line stands for all frameworks of one installed SDK;
 `<Framework>` is literal there. A source that is not available is reported on
 stderr as `ksrc-native: skipped: <error>` and left out. The command fails when
-nothing can be listed, or when `--konan-home` or `--kotlin-version` names a
-distribution that cannot be used.
+nothing can be listed, when `--konan-home` or `--kotlin-version` names a
+distribution that cannot be used, or when `--target` is not a target of the
+distribution that was found.
 
 ### `where <coordinate>`
 
@@ -199,7 +213,7 @@ to stdout.
 | `E_BAD_COORD` | a coordinate cannot be parsed, has an unknown group, or versions disagree |
 | `E_BAD_FILE_ID` | a file-id cannot be parsed |
 | `E_BAD_LINES` | the `--lines` range cannot be parsed |
-| `E_BAD_ARGS` | wrong arguments, an unknown flag or command, an rg argument that is not allowed |
+| `E_BAD_ARGS` | wrong arguments, an unknown flag or command, an rg argument that is not allowed, an `--sdk` value that is not an SDK name |
 | `E_KLIB_FAILED` | the `klib` tool failed, usually because no JDK is on `PATH` |
 | `E_DUMP_FORMAT` | the `klib` output is not a metadata dump the tool understands |
 | `E_RG_FAILED` | ripgrep failed, usually because of a bad pattern or argument |

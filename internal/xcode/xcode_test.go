@@ -2,6 +2,7 @@ package xcode
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -214,5 +215,40 @@ func TestList(t *testing.T) {
 	}
 	if _, err := List(context.Background(), failing); errs.Code(err) != errs.NoXcode {
 		t.Errorf("List(failing xcode-select) error = %v, want %s", err, errs.NoXcode)
+	}
+}
+
+func TestValidSDKName(t *testing.T) {
+	for _, name := range []string{"iphoneos", "iphonesimulator", "macosx", "iphoneos26.4", "macosx26.4", "watchos", "xros2.0", "MacOSX"} {
+		if !ValidSDKName(name) {
+			t.Errorf("ValidSDKName(%q) = false, want true", name)
+		}
+	}
+	for _, name := range []string{"", "/tmp", "/Applications/Xcode.app/x.sdk", "../sdk", "..", ".", "sdk/x", "iphone os", "-iphoneos", "--show-sdk-version", "iphoneos;ls", "iphoneos\n", "26.4", "iphoneos_26", "iphoneos-26"} {
+		if ValidSDKName(name) {
+			t.Errorf("ValidSDKName(%q) = true, want false", name)
+		}
+	}
+}
+
+// xcrun answers `--sdk <directory>` with that directory, so Find must not
+// ask it about anything that is not a name.
+func TestFindRefusesAPathWithoutRunningXcrun(t *testing.T) {
+	dir := t.TempDir()
+	runner := &testutil.Runner{
+		Paths: map[string]string{"xcrun": "/usr/bin/xcrun"},
+		RunFunc: func(_ context.Context, cmd executil.Command) error {
+			_, err := io.WriteString(cmd.Stdout, dir+"\n")
+			return err
+		},
+	}
+	for _, name := range []string{dir, "/tmp", "../sdk", "-iphoneos"} {
+		sdk, err := Find(context.Background(), runner, name)
+		if errs.Code(err) != errs.BadArgs || !strings.Contains(err.Error(), "is not an Apple SDK name") || !strings.Contains(err.Error(), "Try: use iphoneos, iphonesimulator, macosx") {
+			t.Errorf("Find(%q) = %+v, %v; want %s", name, sdk, err, errs.BadArgs)
+		}
+	}
+	if calls := runner.Calls(); len(calls) != 0 {
+		t.Errorf("Find ran xcrun %d times for values that are not names, want 0", len(calls))
 	}
 }

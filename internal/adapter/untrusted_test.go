@@ -2,12 +2,15 @@ package adapter
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/satanyakiv/ksrc-native/internal/cache"
 	"github.com/satanyakiv/ksrc-native/internal/errs"
+	"github.com/satanyakiv/ksrc-native/internal/executil"
 	"github.com/satanyakiv/ksrc-native/internal/testutil"
 )
 
@@ -137,5 +140,207 @@ func TestSearchTakesAFlagLikePatternAsAPattern(t *testing.T) {
 	}
 	if tr.sprung() {
 		t.Error("a pattern that names a preprocessor made rg run it")
+	}
+}
+
+// cacheFiles counts the regular files below the cache directory.
+func cacheFiles(t *testing.T, w *world) int {
+	t.Helper()
+	n := 0
+	err := filepath.WalkDir(w.env[cache.EnvDir], func(_ string, d fs.DirEntry, err error) error {
+		if err == nil && d.Type().IsRegular() {
+			n++
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// badTargets are values that reach the same directory as a real target on
+// some file system, or no directory at all. None is a name in klib/platform.
+var badTargets = []string{
+	"../platform/ios_arm64",
+	"ios_arm64/",
+	"./ios_arm64",
+	"ios_arm64/../ios_simulator_arm64",
+	"IOS_ARM64",
+	"Ios_Arm64",
+	"ios_arm46",
+	" ios_arm64",
+}
+
+func TestTargetMustBeAnExactTargetOfTheDistribution(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	operations := map[string]func(Common) error{
+		"search a module": func(c Common) error {
+			return w.a.Search(ctx, SearchRequest{Common: c, Pattern: "x", Modules: []string{unModule}})
+		},
+		"search all platform libraries": func(c Common) error {
+			return w.a.Search(ctx, SearchRequest{Common: c, Pattern: "x", AllPlatform: true})
+		},
+		"search without a module": func(c Common) error {
+			return w.a.Search(ctx, SearchRequest{Common: c, Pattern: "x"})
+		},
+		"where": func(c Common) error {
+			return w.a.Where(ctx, WhereRequest{Common: c, Coordinate: unModule})
+		},
+		"deps": func(c Common) error {
+			return w.a.Deps(ctx, DepsRequest{Common: c})
+		},
+	}
+	for name, run := range operations {
+		for _, target := range badTargets {
+			t.Run(name+"/"+target, func(t *testing.T) {
+				w.reset()
+				err := run(Common{Target: target})
+				if errs.Code(err) != errs.NoSources {
+					t.Fatalf("%s with --target %q: error = %v, stdout = %q; want %s", name, target, err, w.stdout.String(), errs.NoSources)
+				}
+				if !strings.Contains(err.Error(), "pass --target with one of: ios_arm64, ios_simulator_arm64") {
+					t.Errorf("error %q does not list the targets", err.Error())
+				}
+				if w.stdout.Len() != 0 {
+					t.Errorf("stdout = %q, want nothing", w.stdout.String())
+				}
+			})
+		}
+	}
+	if calls := w.dist.KlibCalls(t); len(calls) != 0 {
+		t.Errorf("a refused target ran klib %d times, want 0", len(calls))
+	}
+	if n := cacheFiles(t, w); n != 0 {
+		t.Errorf("a refused target left %d files in the cache, want 0", n)
+	}
+
+	// The cache is not poisoned: a normal search still finds the class.
+	w.reset()
+	if err := w.a.Search(ctx, SearchRequest{Pattern: "class platform/UserNotifications/UNNotification ", Modules: []string{unModule}}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(w.stdout.String(), "kn.platform:UserNotifications:2.4.21!/ios_arm64/UNNotification.kt 2:13:") {
+		t.Errorf("stdout after the refused targets = %q, want the class line", w.stdout.String())
+	}
+}
+
+func TestCatChecksTheTargetSegmentOfAFileID(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	if err := w.a.Search(ctx, SearchRequest{Pattern: "x", Modules: []string{unModule}}); err != nil {
+		t.Fatal(err)
+	}
+	before := cacheFiles(t, w)
+
+	for _, fileID := range []string{
+		"kn.platform:UserNotifications:2.4.21!/IOS_ARM64/UNNotification.kt",
+		"kn.platform:UserNotifications:2.4.21!/ios_arm46/UNNotification.kt",
+		"kn.platform:UserNotifications:2.4.21!/../platform/ios_arm64/UNNotification.kt",
+		"kn.platform:UserNotifications:2.4.21!/platform/ios_arm64/UNNotification.kt",
+	} {
+		w.reset()
+		err := w.a.Cat(ctx, CatRequest{FileID: fileID})
+		if errs.Code(err) != errs.NoSources || !strings.Contains(err.Error(), "pass --target with one of: ios_arm64, ios_simulator_arm64") {
+			t.Errorf("Cat(%q) error = %v, want %s with the target list", fileID, err, errs.NoSources)
+		}
+		if w.stdout.Len() != 0 {
+			t.Errorf("Cat(%q) wrote %q to stdout", fileID, w.stdout.String())
+		}
+	}
+	if calls := w.dist.KlibCalls(t); len(calls) != 1 {
+		t.Errorf("klib ran %d times, want only the 1 run of the search", len(calls))
+	}
+	if after := cacheFiles(t, w); after != before {
+		t.Errorf("the cache has %d files after the refused file-ids, want the %d from before", after, before)
+	}
+
+	// A real target in the file-id wins over --target, as before.
+	w.reset()
+	err := w.a.Cat(ctx, CatRequest{Common: Common{Target: "ios_simulator_arm64"}, FileID: "kn.platform:UserNotifications:2.4.21!/ios_arm64/UNNotification.kt", Lines: "2"})
+	if err != nil || !strings.HasPrefix(w.stdout.String(), "public open class platform/UserNotifications/UNNotification ") {
+		t.Errorf("Cat() = %v with stdout %q, want line 2 of the class", err, w.stdout.String())
+	}
+}
+
+func TestSDKMustBeAnSDKName(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	xcrunRuns := 0
+	fakes := w.xcode.Fakes()
+	realXcrun := fakes["xcrun"]
+	fakes["xcrun"] = func(ctx context.Context, cmd executil.Command) error {
+		xcrunRuns++
+		return realXcrun(ctx, cmd)
+	}
+	w.runner.Fakes = fakes
+
+	dir := t.TempDir()
+	for _, sdk := range []string{dir, "/tmp", "../sdk", "..", ".", "iphone os", "-iphoneos", "--show-sdk-version", "iphoneos;ls", "26.4"} {
+		for name, run := range map[string]func() error{
+			"search": func() error {
+				return w.a.Search(ctx, SearchRequest{Common: Common{SDK: sdk}, Pattern: "x", Modules: []string{"sdk.apple:UIKit"}})
+			},
+			"where": func() error {
+				return w.a.Where(ctx, WhereRequest{Common: Common{SDK: sdk}, Coordinate: "sdk.apple:UIKit"})
+			},
+			"cat": func() error {
+				return w.a.Cat(ctx, CatRequest{Common: Common{SDK: sdk}, FileID: "sdk.apple:UIKit!/UIView.h"})
+			},
+			"deps": func() error { return w.a.Deps(ctx, DepsRequest{Common: Common{SDK: sdk}}) },
+			"search another group": func() error {
+				return w.a.Search(ctx, SearchRequest{Common: Common{SDK: sdk}, Pattern: "x", Modules: []string{unModule}})
+			},
+		} {
+			w.reset()
+			err := run()
+			if errs.Code(err) != errs.BadArgs || !strings.Contains(err.Error(), "--sdk") || !strings.Contains(err.Error(), "Try: use iphoneos, iphonesimulator, macosx") {
+				t.Errorf("%s with --sdk %q: error = %v, want %s that names --sdk and the usual names", name, sdk, err, errs.BadArgs)
+			}
+			if w.stdout.Len() != 0 {
+				t.Errorf("%s with --sdk %q wrote %q to stdout", name, sdk, w.stdout.String())
+			}
+		}
+	}
+	// The SDK part of a coordinate goes to xcrun too.
+	for _, module := range []string{"sdk.apple:UIKit:-iphoneos", "sdk.apple:UIKit:..", "sdk.apple:UIKit:iphoneos;ls"} {
+		w.reset()
+		err := w.a.Search(ctx, SearchRequest{Pattern: "x", Modules: []string{module}})
+		if errs.Code(err) != errs.BadCoord || !strings.Contains(err.Error(), "SDK") {
+			t.Errorf("Search(module %q) error = %v, want %s that names the SDK", module, err, errs.BadCoord)
+		}
+	}
+	if xcrunRuns != 0 || len(w.dist.KlibCalls(t)) != 0 {
+		t.Errorf("a refused SDK name ran xcrun %d times and klib %d times, want 0 and 0", xcrunRuns, len(w.dist.KlibCalls(t)))
+	}
+
+	// Real names still resolve.
+	for sdk, want := range map[string]string{"": "iPhoneOS26.4.sdk", "iphoneos": "iPhoneOS26.4.sdk", "iphonesimulator": "iPhoneSimulator26.4.sdk", "iphoneos26.4": "iPhoneOS26.4.sdk"} {
+		w.reset()
+		if err := w.a.Where(ctx, WhereRequest{Common: Common{SDK: sdk}, Coordinate: "sdk.apple:UIKit"}); err != nil || !strings.Contains(w.stdout.String(), want) {
+			t.Errorf("Where(--sdk %q) = %v with stdout %q, want a path with %s", sdk, err, w.stdout.String(), want)
+		}
+	}
+}
+
+func TestDoctorWithABadTargetOrSDK(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+
+	// A target that is not an exact name is a failed check, not "ok".
+	for _, target := range []string{"IOS_ARM64", "../platform/ios_arm64", "tvos_arm64"} {
+		w.reset()
+		err := w.a.Doctor(ctx, DoctorRequest{Common: Common{Target: target}})
+		want := "platform: MISSING - no platform libraries for target " + target + "; available targets: ios_arm64, ios_simulator_arm64\n"
+		if err == nil || !strings.Contains(w.stdout.String(), want) {
+			t.Errorf("Doctor(--target %q) = %v, output:\n%swant the line %q and an error", target, err, w.stdout.String(), want)
+		}
+	}
+
+	w.reset()
+	err := w.a.Doctor(ctx, DoctorRequest{Common: Common{SDK: "/tmp"}})
+	if errs.Code(err) != errs.BadArgs || !strings.Contains(err.Error(), "--sdk") {
+		t.Errorf("Doctor(--sdk /tmp) error = %v, want %s that names --sdk", err, errs.BadArgs)
 	}
 }

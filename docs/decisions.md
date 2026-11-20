@@ -173,16 +173,30 @@ read a file outside the three sources.
 - No MCP tool has a `konan_home` input. The distribution is set by
   `--konan-home` of `ksrc-native mcp` or by `KONAN_HOME`. A call that sends
   the field is rejected by the input schema.
+- A target, from `--target`, the `target` input or the first segment of a
+  `kn.platform` file-id, must be the exact name of a directory in
+  `klib/platform` of the distribution. The name is compared with the
+  directory listing and is never joined into a path first.
+- An SDK, from `--sdk`, the `sdk` input or the version of an `sdk.apple`
+  coordinate, must be a letter followed by letters, digits and dots. `xcrun`
+  is not run for anything else.
 
 **Why.** A model fills these fields, and a model reads files it did not
 write. Before this change `-- --pre <script>` ran the script, and a path after
 `--` printed lines of any file the user can read. A call with `konan_home`
-ran `<that directory>/bin/klib`. A README in a hostile repository could ask
-for any of them.
+ran `<that directory>/bin/klib`. `--target ../platform/ios_arm64` wrote a
+dump outside the `src` directory of its cache entry and left the entry
+useless until `clean`; `IOS_ARM64` got a second cache entry on a file system
+that ignores case. `xcrun --sdk <directory>` answers with that directory, so
+`--sdk` could point the search at any directory. A README in a hostile
+repository could ask for any of them.
 
 **Cost.** An rg flag outside the list fails with `E_BAD_ARGS`, also for a
 person at a terminal: no `-l`, no `-c`, no `--hidden`, no `-t`. `-m1` must be
 written `-m 1`. A new flag needs a line in the list and a test. An agent that
 talks MCP cannot switch to a distribution outside `~/.konan` in the middle of
 a session; it picks among the installed ones with `kotlin_version` or
-`project`, or the server is restarted with `--konan-home`.
+`project`, or the server is restarted with `--konan-home`. A target must be
+typed exactly; `deps` with a target the distribution does not have now fails
+where it used to list the SDKs and skip the rest. An SDK outside Xcode cannot
+be named by its path.

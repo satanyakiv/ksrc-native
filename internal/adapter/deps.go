@@ -24,8 +24,9 @@ type DepsRequest struct {
 // The platform lines cover the libraries of --target. An sdk.apple line
 // stands for all frameworks of one installed SDK; <Framework> is literal
 // there. A source that is not available is reported on stderr and skipped;
-// Deps fails when nothing can be listed, or when the caller named a
-// distribution (--konan-home, --kotlin-version) that cannot be used.
+// Deps fails when nothing can be listed, when the caller named a
+// distribution (--konan-home, --kotlin-version) that cannot be used, or when
+// --target is not a target of the distribution that was found.
 func (a *Adapter) Deps(ctx context.Context, req DepsRequest) error {
 	return coded(a.deps(ctx, req))
 }
@@ -39,6 +40,13 @@ func (a *Adapter) deps(ctx context.Context, req DepsRequest) error {
 	// would hide a typo behind a list of SDKs and a zero exit code.
 	if req.KonanHome != "" || req.KotlinVersion != "" {
 		if _, err := r.distribution(); err != nil {
+			return err
+		}
+	}
+	// The same holds for the target: with a distribution to check it against,
+	// a wrong one is a wrong argument, not a missing source.
+	if dist, err := r.distribution(); err == nil {
+		if err := dist.RequireTarget(r.common.target()); err != nil {
 			return err
 		}
 	}
@@ -73,12 +81,9 @@ func (a *Adapter) deps(ctx context.Context, req DepsRequest) error {
 
 // depsKonan lists the platform libraries of the target and the stdlib.
 func (a *Adapter) depsKonan(r *resolver, out *bufio.Writer, printed *int) error {
-	platform, err := r.platform()
-	if err != nil {
-		return err
-	}
 	target := r.common.target()
-	if err := platform.Dist.RequireTarget(target); err != nil {
+	platform, err := r.platform(target)
+	if err != nil {
 		return err
 	}
 	for _, name := range platform.Dist.Frameworks(target) {

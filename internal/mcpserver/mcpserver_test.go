@@ -617,3 +617,35 @@ func TestKonanHomeOfTheServerApplies(t *testing.T) {
 		t.Errorf("deps on a server with a bad --konan-home: IsError = %v, content = %q", res.IsError, got)
 	}
 }
+
+// target, sdk and the target segment of a file-id are inputs a model fills.
+func TestTargetAndSDKInputsAreChecked(t *testing.T) {
+	f := newFixture(t)
+	session := f.connect(t, Options{Tools: AllTools})
+	tests := []struct {
+		name   string
+		tool   string
+		args   map[string]any
+		prefix string
+	}{
+		{"target with a path", ToolSearch, map[string]any{"pattern": "x", "modules": []string{unModule}, "target": "../platform/ios_arm64"}, "E_NO_SOURCES: "},
+		{"target in another case", ToolWhere, map[string]any{"coordinate": unModule, "target": "IOS_ARM64"}, "E_NO_SOURCES: "},
+		{"target of deps", ToolDeps, map[string]any{"target": "ios_arm64/"}, "E_NO_SOURCES: "},
+		{"target segment of a file-id", ToolCat, map[string]any{"file_id": "kn.platform:UserNotifications:2.4.21!/IOS_ARM64/UNNotification.kt"}, "E_NO_SOURCES: "},
+		{"SDK that is a directory", ToolSearch, map[string]any{"pattern": "x", "modules": []string{"sdk.apple:UIKit"}, "sdk": t.TempDir()}, "E_BAD_ARGS: "},
+		{"SDK that looks like a flag", ToolWhere, map[string]any{"coordinate": "sdk.apple:UIKit", "sdk": "--show-sdk-version"}, "E_BAD_ARGS: "},
+		{"SDK in a coordinate", ToolSearch, map[string]any{"pattern": "x", "modules": []string{"sdk.apple:UIKit:-iphoneos"}}, "E_BAD_COORD: "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := call(t, session, tt.tool, tt.args)
+			got := texts(t, res)
+			if !res.IsError || len(got) != 1 || !strings.HasPrefix(got[0], tt.prefix) || !strings.Contains(got[0], " Try: ") {
+				t.Errorf("IsError = %v, content = %q; want one error text with prefix %q and a hint", res.IsError, got, tt.prefix)
+			}
+		})
+	}
+	if calls := f.dist.KlibCalls(t); len(calls) != 0 {
+		t.Errorf("the refused calls built %d dumps, want 0", len(calls))
+	}
+}

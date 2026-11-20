@@ -86,7 +86,11 @@ Rules that follow from the map:
   untrusted: a model fills it, and text in a repository can steer the model.
   It never reaches a program as an argument and never becomes part of a path
   without a check. rg arguments pass `search.NormalizeExtraArgs` (an
-  allow-list); a new rg flag is added there, with a test, or not at all.
+  allow-list); a new rg flag is added there, with a test, or not at all. A
+  target is compared with the names in `klib/platform`
+  (`konan.Distribution.RequireTarget`), an SDK with the form of a name
+  (`xcode.ValidSDKName`); the adapter runs both before a provider exists.
+  The distribution (`--konan-home`) is never an MCP input.
 
 ## Code style
 

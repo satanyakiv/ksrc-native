@@ -412,14 +412,20 @@ func TestDepsSkipsWhatIsNotAvailable(t *testing.T) {
 		}
 	}
 
-	// An unknown target skips the platform part.
+	// Neither is a target the distribution does not have: a list of SDKs with
+	// exit code 0 would hide the typo.
 	w = newWorld(t)
 	w.reset()
-	if err := w.a.Deps(context.Background(), DepsRequest{Common: Common{Target: "tvos_arm64"}}); err != nil {
-		t.Fatal(err)
+	err := w.a.Deps(context.Background(), DepsRequest{Common: Common{Target: "tvos_arm64"}})
+	if errs.Code(err) != errs.NoSources || !strings.Contains(err.Error(), `target "tvos_arm64"`) || w.stdout.Len() != 0 {
+		t.Errorf("Deps(--target tvos_arm64) error = %v, stdout = %q; want %s and no output", err, w.stdout.String(), errs.NoSources)
 	}
-	if strings.Contains(w.stdout.String(), "kn.platform") || !strings.Contains(w.stderr.String(), `target "tvos_arm64"`) {
-		t.Errorf("stdout = %q, stderr = %q", w.stdout.String(), w.stderr.String())
+
+	// Without a distribution the target cannot be checked and is not used.
+	w.a.UserHome = t.TempDir()
+	w.reset()
+	if err := w.a.Deps(context.Background(), DepsRequest{Common: Common{Target: "tvos_arm64"}}); err != nil || strings.Count(w.stdout.String(), "sdk.apple:<Framework>:") != 3 {
+		t.Errorf("Deps(--target tvos_arm64) without Kotlin/Native = %v, stdout = %q; want the three SDK lines", err, w.stdout.String())
 	}
 }
 
