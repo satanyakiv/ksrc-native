@@ -33,9 +33,6 @@ type Location struct {
 
 // Provider resolves the coordinates of one group.
 type Provider interface {
-	// Group returns the synthetic group the provider owns, for example
-	// kn.platform.
-	Group() string
 	// Resolve makes the sources of a module available and returns where they
 	// are. It may build and cache them on first use.
 	Resolve(ctx context.Context, req Request) (Source, error)

@@ -36,9 +36,6 @@ type Stdlib struct {
 	Log   io.Writer // progress messages; may be nil
 }
 
-// Group implements Provider.
-func (s *Stdlib) Group() string { return StdlibGroup }
-
 // Available reports whether the distribution ships the sources zip.
 func (s *Stdlib) Available() bool {
 	info, err := os.Stat(s.Dist.StdlibSources())

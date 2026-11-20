@@ -34,9 +34,6 @@ type Platform struct {
 	Log    io.Writer // progress messages; may be nil
 }
 
-// Group implements Provider.
-func (p *Platform) Group() string { return PlatformGroup }
-
 // Locate implements Provider: the origin is the klib directory.
 func (p *Platform) Locate(_ context.Context, req Request) (Location, error) {
 	coord, klib, err := p.find(req)

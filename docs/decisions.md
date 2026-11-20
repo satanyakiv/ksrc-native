@@ -322,3 +322,25 @@ target given with `--target` is never replaced, and a file-id carries its
 target, so `cat` is not affected. The system the tool runs on is a field of
 the adapter (`GOOS`, `GOARCH`), so tests can be a Linux machine on a Mac. The
 Linux path is covered by tests with a fake distribution only.
+
+## Known limits in 0.1
+
+These are known and left as they are for the first release.
+
+- **A fourth source needs edits in about eight places.** The three groups
+  are written out where they are used: `knownGroup`, `usesKonan`,
+  `resolver.provider` and `groupsHint` in `internal/adapter/adapter.go`,
+  `deps`, `doctor`, `cacheNamespaces` in `internal/adapter/clean.go`, and the
+  help text in `internal/cli/cli.go`. A table of providers would turn that
+  into one entry. With three sources the table costs more than it saves. The
+  unused method `Provider.Group()` was the start of such a table and was
+  removed on 2026-11-20.
+- **The real Kotlin/Native distribution was exercised on macOS arm64 only.**
+  The Linux path (the host target, no Apple SDKs) is covered by tests with a
+  fake distribution. Nobody ran the tool against a real Linux distribution
+  before 0.1.
+- **Windows is not supported.** No binary is built for it, and the process
+  group that stops `klib` with its children exists on Unix only.
+- **An entry of an older dump format stays on disk until its library is used
+  again or until `clean`.** `doctor` and `clean` count such an entry.
+- **The binaries are not signed or notarized.**

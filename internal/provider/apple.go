@@ -21,9 +21,6 @@ type AppleSDK struct {
 	Runner executil.Runner
 }
 
-// Group implements Provider.
-func (a *AppleSDK) Group() string { return AppleGroup }
-
 // Resolve implements Provider. The SDK is the version of the coordinate when
 // present, else Request.SDK, else the default SDK.
 func (a *AppleSDK) Resolve(ctx context.Context, req Request) (Source, error) {
