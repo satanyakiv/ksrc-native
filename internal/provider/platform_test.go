@@ -255,3 +255,74 @@ func TestPlatformCachedSkipsEntriesOfAnotherDumpFormat(t *testing.T) {
 		t.Errorf("Cached() = %+v, want only the entry of the current dump format at %s", cached, current.Root)
 	}
 }
+
+// The format is part of the key, so an entry of an older format is never
+// read again. Left on disk it shows up as a second line for the same library
+// in clean and in the count of doctor.
+func TestPlatformResolveRemovesTheEntryOfAnotherDumpFormat(t *testing.T) {
+	f := newFixture(t)
+	klib, err := f.platform.Dist.FindPlatformKlib("ios_arm64", "UserNotifications")
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := func(key, origin, target, format string) cache.Entry {
+		t.Helper()
+		e, err := f.platform.Cache.Ensure(PlatformNamespace, key, func(srcDir string) (cache.Meta, error) {
+			err := os.WriteFile(filepath.Join(srcDir, "Old.kt"), []byte("old\n"), 0o644)
+			return cache.Meta{Coordinate: "kn.platform:UserNotifications:2.4.21", Target: target, Origin: origin, Files: 1, Format: format}, err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e
+	}
+	gone := []cache.Entry{
+		old(platformKeyFor(klib.Path, "none"), klib.Path, "ios_arm64", ""),
+		old(platformKeyFor(klib.Path, "0"), klib.Path, "ios_arm64", "0"),
+	}
+	kept := []cache.Entry{
+		old(cache.Key("another distribution"), "/elsewhere/klib/UserNotifications", "ios_arm64", "0"),
+		old(cache.Key("another target"), klib.Path, "ios_simulator_arm64", "0"),
+	}
+
+	request := Request{Coordinate: coord(t, "kn.platform:UserNotifications"), Target: "ios_arm64"}
+	current, err := f.platform.Resolve(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	check := func(when string) {
+		t.Helper()
+		for _, e := range gone {
+			if _, err := os.Stat(e.Dir); !os.IsNotExist(err) {
+				t.Errorf("%s: the entry of dump format %q is still at %s (%v)", when, e.Meta.Format, e.Dir, err)
+			}
+		}
+		for _, e := range kept {
+			if _, err := os.Stat(filepath.Join(e.Src, "Old.kt")); err != nil {
+				t.Errorf("%s: the entry with origin %s and target %s was removed: %v", when, e.Meta.Origin, e.Meta.Target, err)
+			}
+		}
+		if _, err := os.Stat(current.Root); err != nil {
+			t.Errorf("%s: the current entry is gone: %v", when, err)
+		}
+		if got := len(f.platform.Cache.List(PlatformNamespace)); got != 1+len(kept) {
+			t.Errorf("%s: the cache lists %d entries, want %d", when, got, 1+len(kept))
+		}
+	}
+	check("after the build")
+	if !strings.Contains(f.log.String(), "removed 2 cache entries of another dump format") {
+		t.Errorf("log = %q, want a note about the 2 removed entries", f.log.String())
+	}
+
+	// An old entry that appears next to a current one (an older binary still
+	// in use) goes with the next use, without a build.
+	gone = []cache.Entry{old(platformKeyFor(klib.Path, "0"), klib.Path, "ios_arm64", "0")}
+	f.log.Reset()
+	if _, err := f.platform.Resolve(context.Background(), request); err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	check("after a use without a build")
+	if strings.Contains(f.log.String(), "dumping") || !strings.Contains(f.log.String(), "removed 1 cache entry of another dump format") {
+		t.Errorf("log = %q, want no build and a note about 1 removed entry", f.log.String())
+	}
+}

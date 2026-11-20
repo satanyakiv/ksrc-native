@@ -256,6 +256,34 @@ func (s Store) Remove(namespaces ...string) error {
 	return nil
 }
 
+// Drop removes one entry. It is for an entry that nothing can read any more,
+// such as a dump of an older format whose replacement exists.
+func (s Store) Drop(e Entry) error {
+	nsDir, name := filepath.Dir(e.Dir), filepath.Base(e.Dir)
+	// Only a directory two levels below the root is an entry: a caller that
+	// built an Entry by hand cannot point this at anything else.
+	if e.Dir == "" || filepath.Clean(e.Dir) != e.Dir || filepath.Dir(nsDir) != filepath.Clean(s.Root) || strings.HasPrefix(name, ".") {
+		return cacheError(errors.New("not an entry of this cache: "+e.Dir), s.Root)
+	}
+	// Renamed first: a rename is atomic, so no reader meets an entry that is
+	// ready and half deleted. What a failed removal leaves has the name of a
+	// build in progress, and Ensure sweeps it like one.
+	doomed := filepath.Join(nsDir, tmpPrefix+"drop-"+name)
+	if err := os.RemoveAll(doomed); err != nil {
+		return cacheError(err, doomed)
+	}
+	if err := os.Rename(e.Dir, doomed); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return cacheError(err, e.Dir)
+	}
+	if err := os.RemoveAll(doomed); err != nil {
+		return cacheError(err, doomed)
+	}
+	return nil
+}
+
 func dirSize(dir string) int64 {
 	var total int64
 	filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {

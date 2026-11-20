@@ -299,8 +299,11 @@ The key of a platform dump is a hash of the real path of the klib, the
 `compiler_version` in its manifest and the format version of the splitter.
 `meta.json` records that version as `format`. After an upgrade of the tool
 that changes the split files, a library is dumped again on its next use. The
-entries of the older format are not read any more; they stay on disk until
-`ksrc-native clean`.
+entry of the other format is never read again. It is removed when the same
+library is used: a note on stderr says `ksrc-native: removed 1 cache entry of
+another dump format for <coordinate> (<target>)`. A library that is not used
+again keeps its old entry until `ksrc-native clean`; `doctor` and `clean`
+count such an entry.
 
 ## MCP tools
 

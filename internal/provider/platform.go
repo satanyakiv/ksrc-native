@@ -84,7 +84,32 @@ func (p *Platform) Resolve(ctx context.Context, req Request) (Source, error) {
 	if err != nil {
 		return Source{}, err
 	}
+	p.dropOtherFormats(resolved, klib, entry)
 	return Source{Coordinate: resolved, Root: entry.Src, Origin: klib.Path}, nil
+}
+
+// dropOtherFormats removes the entries of the same klib and target that
+// another version of the splitter wrote. The format is part of the key, so
+// nothing reads them again; left on disk they are a second line for the same
+// library in clean and in the count of doctor. It runs on every use, not
+// only after a build: an older binary that is still in use can write such an
+// entry at any time. A removal that fails is not a failure of the search.
+func (p *Platform) dropOtherFormats(coord Coordinate, klib konan.PlatformKlib, current cache.Entry) {
+	removed := 0
+	for _, e := range p.Cache.List(PlatformNamespace) {
+		if e.Dir == current.Dir || e.Meta.Format == dump.FormatVersion || e.Meta.Origin != klib.Path || e.Meta.Target != klib.Target {
+			continue
+		}
+		if p.Cache.Drop(e) == nil {
+			removed++
+		}
+	}
+	switch {
+	case removed == 1:
+		p.logf("ksrc-native: removed 1 cache entry of another dump format for %s (%s)", coord, klib.Target)
+	case removed > 1:
+		p.logf("ksrc-native: removed %d cache entries of another dump format for %s (%s)", removed, coord, klib.Target)
+	}
 }
 
 // build dumps one klib and writes the split files into <srcDir>/<target>/.
@@ -142,8 +167,9 @@ func (p *Platform) Cached(target string) []Source {
 			continue
 		}
 		// An entry of another splitter version has another key, so a named
-		// search never reads it. It stays on disk until clean; reading it
-		// here would print every hit twice next to the rebuilt entry.
+		// search never reads it. It stays on disk until its library is used
+		// again (dropOtherFormats) or until clean; reading it here would
+		// print every hit twice next to the rebuilt entry.
 		if e.Meta.Format != dump.FormatVersion {
 			continue
 		}

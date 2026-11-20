@@ -90,8 +90,17 @@ splitter until `clean`. A search without `--module` skips entries of another
 format, so a hit is not printed twice. `List` ignores names that start with a
 dot, because the temporary directory of a build holds a `meta.json` for a
 moment before the rename. A build sweeps temporary directories older than one
-hour. The cost: entries of an older format stay on disk, unread, until
-`clean`; `doctor` and `clean` still count them.
+hour.
+
+An entry of another format is removed when its library is used again, with a
+note on stderr. Left on disk it was a second line for the same library in
+`clean` and one more dump in the count of `doctor`. The rule is narrow: the
+same klib path, the same target, another format. An entry of another
+distribution is not touched. The removal is a rename to a temporary name and
+then a delete, so no reader meets an entry that is half gone. The cost: two
+versions of the tool with different formats, used in turn on one cache, dump
+a library again on every switch. A library that is never used again keeps its
+old entry until `clean`, and `doctor` and `clean` count it.
 
 ## 2026-11-19: Apple headers are searched in place
 

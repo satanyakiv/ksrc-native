@@ -365,3 +365,58 @@ func TestEnsureFromTwoGoroutinesLeavesOneEntry(t *testing.T) {
 		}
 	}
 }
+
+func TestDropRemovesOneEntryAndNothingElse(t *testing.T) {
+	store := Store{Root: filepath.Join(t.TempDir(), "cache")}
+	build := func(srcDir string) (Meta, error) {
+		return Meta{Coordinate: "x:y:1", Files: 1}, os.WriteFile(filepath.Join(srcDir, "A.kt"), []byte("a\n"), 0o644)
+	}
+	first, err := store.Ensure("ns", "first", build)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.Ensure("ns", "second", build)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.Drop(first); err != nil {
+		t.Fatalf("Drop(first) error = %v", err)
+	}
+	if _, ok := store.Get("ns", "first"); ok {
+		t.Error("Get(first) after Drop finds the entry")
+	}
+	if _, ok := store.Get("ns", "second"); !ok {
+		t.Error("Drop(first) removed the second entry")
+	}
+	left, err := os.ReadDir(filepath.Join(store.Root, "ns"))
+	if err != nil || len(left) != 1 || left[0].Name() != "second" {
+		t.Errorf("the namespace holds %v (%v) after Drop, want only the second entry", left, err)
+	}
+	if err := store.Drop(first); err != nil {
+		t.Errorf("Drop() of an entry that is gone: error = %v, want nil", err)
+	}
+
+	// Only a directory two levels below the root is an entry of this store.
+	outside := filepath.Join(t.TempDir(), "keep")
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, dir := range map[string]string{
+		"a directory outside the root": outside,
+		"the namespace":                filepath.Join(store.Root, "ns"),
+		"the root":                     store.Root,
+		"a directory inside an entry":  second.Src,
+		"a dot name":                   filepath.Join(store.Root, "ns", ".."),
+	} {
+		if err := store.Drop(Entry{Dir: dir}); err == nil {
+			t.Errorf("Drop(%s) error = nil, want a refusal", name)
+		}
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Errorf("Drop() removed a directory outside the root: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(second.Src, "A.kt")); err != nil {
+		t.Errorf("Drop() damaged the second entry: %v", err)
+	}
+}
